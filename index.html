@@ -748,13 +748,11 @@
       if (!raw) return "";
       const digits = raw.replace(/[^0-9]/g, "");
       if (!digits) return raw;
-      // Keep the first digit visible and mask the remaining digits.
-      // Example: 45000 -> 4*.***
-      const masked = digits.charAt(0) + "*".repeat(Math.max(1, digits.length - 1));
-      const grouped = masked.length > 3
-        ? masked.slice(0, -3) + "." + masked.slice(-3)
-        : masked;
-      return `Rp ${grouped}`;
+      // Public buyer view: always show the first digit, then mask the
+      // remaining value in the requested visual format.
+      // Example: 40000 -> Rp 4**.***
+      if (digits.length >= 4) return `Rp ${digits.charAt(0)}**.***`;
+      return `Rp ${digits.charAt(0)}**`;
     }
 
     function getTakeRate(item) {
