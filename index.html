@@ -742,6 +742,25 @@
       }
       return id;
     }
+    function maskTakeRate(value) {
+      if (value === null || value === undefined || value === "") return "";
+      const raw = String(value).trim();
+      if (!raw) return "";
+      const digits = raw.replace(/[^0-9]/g, "");
+      if (!digits) return raw;
+      // Keep the first digit visible and mask the remaining digits.
+      // Example: 45000 -> 4*.***
+      const masked = digits.charAt(0) + "*".repeat(Math.max(1, digits.length - 1));
+      const grouped = masked.length > 3
+        ? masked.slice(0, -3) + "." + masked.slice(-3)
+        : masked;
+      return `Rp ${grouped}`;
+    }
+
+    function getTakeRate(item) {
+      return item?.take_rate ?? item?.sell_rate ?? item?.takePrice ?? item?.rate_take ?? item?.take ?? null;
+    }
+
     function favoriteKey(item) {
       return String(item?.id ?? item?.order_id ?? item?.name ?? "");
     }
@@ -891,9 +910,15 @@
               ${stockBadge}
               ${typeBadge}
             </div>
-            <div class="text-amber-400 font-black text-xl mb-4">
+            <div class="text-amber-400 font-black text-xl mb-2">
               Rp ${(item.price || 0).toLocaleString('id-ID')}
             </div>
+            ${getTakeRate(item) !== null && getTakeRate(item) !== undefined && getTakeRate(item) !== '' ? `
+              <div class="text-slate-400 text-xs mb-4 flex items-center justify-between gap-3">
+                <span class="font-semibold">TAKE / SELL</span>
+                <span class="text-slate-200 font-bold tracking-wide">${maskTakeRate(getTakeRate(item))}</span>
+              </div>
+            ` : ''}
           </div>
           <div>
             <button 
