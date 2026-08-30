@@ -434,7 +434,7 @@
         <div class="flex justify-between items-center mb-4 border-b border-slate-800 pb-3 gap-3">
           <div>
             <h3 class="font-black text-white">Pesanan Saya</h3>
-            <p class="text-xs text-slate-500 mt-1">Lihat status pesanan dari perangkat ini. Review aktif otomatis setelah order selesai.</p>
+            <p class="text-xs text-slate-500 mt-1">Order aktif ditampilkan di sini. Pesanan selesai/batal masuk ke Riwayat dan dibersihkan otomatis setelah 30 hari.</p>
           </div>
           <button type="button" onclick="loadBuyerOrders()" class="shrink-0 text-xs px-3 py-1.5 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800">Refresh</button>
         </div>
@@ -528,6 +528,11 @@
               <label class="text-xs text-slate-400 mb-1 block">Nama Pembeli</label>
               <input type="text" id="buyer-name" placeholder="Masukkan nama kamu" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm focus:outline-none focus:border-amber-400">
             </div>
+            <div>
+              <label class="text-xs text-slate-400 mb-1 block">Nomor WhatsApp</label>
+              <input type="tel" id="buyer-wa" inputmode="tel" placeholder="Contoh: 081234567890" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm focus:outline-none focus:border-amber-400">
+              <p class="text-[10px] text-slate-500 mt-1">Nomor ini digunakan agar Admin dapat membalas langsung sesuai Order ID.</p>
+            </div>
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label class="text-xs text-slate-400 mb-1 block">GrowID / ID Game</label>
@@ -545,7 +550,6 @@
                 <option value="BCA">Bank BCA</option>
                 <option value="DANA">DANA</option>
                 <option value="GOPAY">GoPay</option>
-                <option value="Seabank">Seabank</option>
               </select>
             </div>
             <div class="bg-slate-950/90 p-3.5 rounded-2xl border border-slate-800 mt-2">
@@ -555,6 +559,47 @@
             <button type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-3 rounded-2xl transition mt-2 shadow-lg shadow-amber-500/20">
               Kirim Pesanan ke WhatsApp CS
             </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Katalog Jual -->
+    <div id="sell-modal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-xl flex items-center justify-center p-4 z-50">
+      <div class="animated-border p-[2px] rounded-3xl max-w-lg w-full max-h-[92vh] shadow-2xl modal-scale-up">
+        <div class="animated-border-content bg-slate-900/90 backdrop-blur-md rounded-3xl p-5 relative overflow-y-auto max-h-[92vh]">
+          <div class="flex items-center justify-between mb-5">
+            <div>
+              <div class="text-[10px] uppercase tracking-[.22em] text-amber-400 font-black">Katalog Jual</div>
+              <h3 class="font-black text-xl text-white" id="sell-item-name">Ajukan Penjualan</h3>
+            </div>
+            <button onclick="closeSellModal()" class="text-slate-400 hover:text-white text-xl">✕</button>
+          </div>
+          <div class="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-3 mb-4">
+            <div class="text-xs text-slate-400">Rate Take</div>
+            <div id="sell-rate-masked" class="text-lg font-black text-amber-400">Rp 4**.***</div>
+            <p class="text-[10px] text-slate-500 mt-1">Rate lengkap dikonfirmasi langsung oleh Admin melalui WhatsApp sebelum kamu melanjutkan.</p>
+          </div>
+          <form onsubmit="submitSellRequest(event)" class="space-y-3">
+            <div class="grid grid-cols-2 gap-3">
+              <div><label class="text-xs text-slate-400 mb-1 block">Nama Seller</label><input id="sell-name" type="text" placeholder="Nama kamu" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm"></div>
+              <div><label class="text-xs text-slate-400 mb-1 block">Jumlah BGL/DL</label><input id="sell-qty" type="number" min="1" value="1" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm"></div>
+            </div>
+            <div>
+              <label class="text-xs text-slate-400 mb-1 block">Nomor WhatsApp</label>
+              <input id="sell-wa" type="tel" inputmode="tel" placeholder="Contoh: 081234567890" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm">
+              <p class="text-[10px] text-slate-500 mt-1">Digunakan untuk menghubungkan balasan Admin langsung ke order ini.</p>
+            </div>
+            <div>
+              <label class="text-xs text-slate-400 mb-1 block">GrowID / ID Game</label>
+              <input id="sell-game-id" type="text" placeholder="Contoh: Azka07" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm">
+            </div>
+            <div><label class="text-xs text-slate-400 mb-1 block">Catatan (opsional)</label><textarea id="sell-note" rows="2" placeholder="Catatan untuk admin" class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm"></textarea></div>
+            <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
+              <p class="text-xs text-slate-300 font-semibold">Setelah rate cocok</p>
+              <p class="text-[10px] text-slate-500 mt-1">Hubungi Admin melalui WhatsApp untuk mengetahui rate lengkap dan instruksi World Drop. Jika rate cocok, klik <b>Setujui & Lanjutkan</b> dari halaman pesanan. Jika tidak cocok, kamu bisa membatalkan pengajuan.</p>
+            </div>
+            <button type="submit" class="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-3 rounded-2xl">Ajukan Penjualan</button>
           </form>
         </div>
       </div>
@@ -742,21 +787,27 @@
       }
       return id;
     }
+    // Public display only: mask TAKE / SELL rates in Katalog Jual.
+    // The original value remains untouched in the data/database.
     function maskTakeRate(value) {
       if (value === null || value === undefined || value === "") return "";
-      const raw = String(value).trim();
-      if (!raw) return "";
-      const digits = raw.replace(/[^0-9]/g, "");
-      if (!digits) return raw;
-      // Public buyer view: always show the first digit, then mask the
-      // remaining value in the requested visual format.
-      // Example: 40000 -> Rp 4**.***
-      if (digits.length >= 4) return `Rp ${digits.charAt(0)}**.***`;
-      return `Rp ${digits.charAt(0)}**`;
+      const digits = String(value).replace(/\D/g, "");
+      if (!digits) return "";
+      // Public SELL/TAKE display: always reveal only the leading digit.
+      // Examples: 40.000 -> Rp 4**.***, 45.500 -> Rp 4**.***, 400.000 -> Rp 4**.***.
+      return `Rp ${digits.charAt(0)}**.***`;
     }
 
     function getTakeRate(item) {
-      return item?.take_rate ?? item?.sell_rate ?? item?.takePrice ?? item?.rate_take ?? item?.take ?? null;
+      if (!item) return null;
+      return item.take_rate ?? item.sell_rate ?? item.takeRate ?? item.sellRate ??
+             item.take_price ?? item.sell_price ?? item.takePrice ?? item.sellPrice ??
+             item.rate_take ?? item.rateTake ?? item.take ?? item.sell ?? null;
+    }
+
+    function isJualItem(item) {
+      const type = String(item?.type ?? "").trim().toLowerCase();
+      return ["jual", "sell", "take", "katalog jual"].includes(type);
     }
 
     function favoriteKey(item) {
@@ -909,22 +960,19 @@
               ${typeBadge}
             </div>
             <div class="text-amber-400 font-black text-xl mb-2">
-              Rp ${(item.price || 0).toLocaleString('id-ID')}
+              ${isJualItem(item) ? (maskTakeRate(getTakeRate(item)) || 'Rp **.***') : `Rp ${(item.price || 0).toLocaleString('id-ID')}`}
             </div>
-            ${getTakeRate(item) !== null && getTakeRate(item) !== undefined && getTakeRate(item) !== '' ? `
-              <div class="text-slate-400 text-xs mb-4 flex items-center justify-between gap-3">
-                <span class="font-semibold">TAKE / SELL</span>
-                <span class="text-slate-200 font-bold tracking-wide">${maskTakeRate(getTakeRate(item))}</span>
-              </div>
+            ${isJualItem(item) ? `
+              <div class="text-slate-500 text-xs mb-4">Rate Take • Hubungi Admin untuk rate lengkap</div>
             ` : ''}
           </div>
           <div>
             <button 
-              onclick="openCartModal(${item.id})" 
-              ${isOut ? 'disabled' : ''} 
-              class="w-full text-center ${isOut ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50' : 'bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-lg shadow-amber-500/10'} font-bold py-2.5 px-4 rounded-xl transition duration-200"
+              onclick="${isJualItem(item) ? `openSellModal(${item.id})` : `openCartModal(${item.id})`}" 
+              ${isOut && !isJualItem(item) ? 'disabled' : ''} 
+              class="w-full text-center ${isOut && !isJualItem(item) ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50' : 'bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-lg shadow-amber-500/10'} font-bold py-2.5 px-4 rounded-xl transition duration-200"
             >
-              ${isOut ? 'Stok Habis' : 'Pesan Sekarang'}
+              ${isJualItem(item) ? 'Ajukan Penjualan' : (isOut ? 'Stok Habis' : 'Pesan Sekarang')}
             </button>
             ${isAdmin ? `
               <div class="flex gap-2 mt-3 pt-3 border-t border-slate-800">
@@ -1063,22 +1111,37 @@
         list.innerHTML = '<p class="text-xs text-slate-500 py-3">Pesanan belum ditemukan di database.</p>';
         return;
       }
-      list.innerHTML = valid.map(({order}) => {
-        const done = order.status === 'COMPLETED';
-        const statusClass = done ? 'border-emerald-700/50 text-emerald-300 bg-emerald-950/40' : 'border-amber-700/50 text-amber-300 bg-amber-950/30';
-        const statusText = done ? 'SELESAI' : 'MENUNGGU';
-        const reviewBtn = done
-          ? `<button type="button" onclick="openReviewForOrder('${escapeReviewText(order.order_id)}')" class="text-xs px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black">⭐ Beri Testimoni</button>`
-          : '<span class="text-[10px] text-slate-500">Review aktif setelah Admin menyelesaikan order.</span>';
+      const renderBuyerOrderCard = ({order}) => {
+        const isSell = order.order_type === 'SELL' || order.payment === 'SELL';
+        const done = order.status === 'COMPLETED' || (isSell && order.sell_status === 'SELL_COMPLETED');
+        const sellStatus = order.sell_status || order.status;
+        const cancelled = isSell && sellStatus === 'SELL_CANCELLED';
+        const statusClass = done ? 'border-emerald-700/50 text-emerald-300 bg-emerald-950/40' : cancelled ? 'border-rose-700/50 text-rose-300 bg-rose-950/30' : 'border-amber-700/50 text-amber-300 bg-amber-950/30';
+        const sellStatusMap = {SELL_WAITING_CONFIRMATION:'MENUNGGU KONFIRMASI',SELL_WAITING_DROP:'MENUNGGU DROP',SELL_PROOF_SUBMITTED:'BUKTI DROP TERKIRIM',SELL_CANCELLED:'DIBATALKAN',SELL_COMPLETED:'SELESAI'};
+        const statusText = done ? 'SELESAI' : (isSell ? (sellStatusMap[sellStatus] || 'MENUNGGU') : 'MENUNGGU');
+        let reviewBtn = done ? `<button type="button" onclick="openReviewForOrder('${escapeReviewText(order.order_id)}')" class="text-xs px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black">⭐ Beri Testimoni</button>` : '<span class="text-[10px] text-slate-500">Review aktif setelah Admin menyelesaikan order.</span>';
+        if (isSell && sellStatus === 'SELL_WAITING_CONFIRMATION') reviewBtn = `<div class="flex gap-2"><button type="button" onclick="agreeSellOrder('${escapeReviewText(order.order_id)}')" class="text-xs px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black">✓ Setujui & Lanjutkan</button><button type="button" onclick="cancelSellOrder('${escapeReviewText(order.order_id)}')" class="text-xs px-3 py-2 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-white font-bold">Batal</button></div>`;
+        if (isSell && sellStatus === 'SELL_WAITING_DROP') reviewBtn = `<label class="text-xs px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black cursor-pointer">📷 Upload Bukti Drop<input type="file" accept="image/*" class="hidden" onchange="uploadSellProof('${escapeReviewText(order.order_id)}', this)"></label>`;
         return `<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div class="min-w-0">
             <div class="flex flex-wrap items-center gap-2"><span class="font-bold text-amber-400 text-sm">${escapeReviewText(order.order_id)}</span><span class="text-[10px] px-2 py-0.5 rounded-md border ${statusClass}">${statusText}</span></div>
-            <p class="text-xs text-slate-300 mt-1">${escapeReviewText(order.product)} · ${Number(order.qty)||0}x · Rp ${Number(order.total||0).toLocaleString('id-ID')}</p>
+            <p class="text-xs text-slate-300 mt-1">${escapeReviewText(order.product)} · ${Number(order.qty)||0}x · ${isSell ? 'Penjualan ke TAASTORE' : `Rp ${Number(order.total||0).toLocaleString('id-ID')}`}</p>
             <p class="text-[10px] text-slate-500 mt-1">${escapeReviewText(order.payment)} · ${escapeReviewText(order.world)}</p>
           </div>
           <div class="shrink-0">${reviewBtn}</div>
         </div>`;
-      }).join('');
+      };
+      const active = valid.filter(({order}) => {
+        const isSell = order.order_type === 'SELL' || order.payment === 'SELL';
+        return !(order.status === 'COMPLETED' || (isSell && ['SELL_COMPLETED','SELL_CANCELLED'].includes(order.sell_status)));
+      });
+      const history = valid.filter(({order}) => {
+        const isSell = order.order_type === 'SELL' || order.payment === 'SELL';
+        return order.status === 'COMPLETED' || (isSell && ['SELL_COMPLETED','SELL_CANCELLED'].includes(order.sell_status));
+      });
+      list.innerHTML = `
+        ${active.length ? `<div class="space-y-3">${active.map(renderBuyerOrderCard).join('')}</div>` : '<p class="text-xs text-slate-500 py-3">Tidak ada pesanan aktif saat ini.</p>'}
+        ${history.length ? `<details class="mt-5 rounded-xl border border-slate-800 bg-slate-950/30"><summary class="cursor-pointer select-none px-3 py-2.5 text-xs font-bold text-slate-400">📁 Riwayat Pesanan (${history.length})</summary><div class="p-3 pt-0 space-y-3">${history.map(renderBuyerOrderCard).join('')}</div></details>` : ''}`;
     }
 
     async function openReviewForOrder(orderId) {
@@ -1195,6 +1258,72 @@
       }
     }
 
+    function openSellModal(id) {
+      playCyberBeep(900, 'sine', 0.06);
+      selectedItem = itemsData.find(i => i.id === id);
+      if (!selectedItem) return;
+      document.getElementById('sell-item-name').innerText = selectedItem.name;
+      document.getElementById('sell-rate-masked').innerText = maskTakeRate(getTakeRate(selectedItem)) || 'Rp **.***';
+      document.getElementById('sell-qty').value = 1;
+      document.getElementById('sell-modal').classList.remove('hidden');
+    }
+    function closeSellModal() {
+      document.getElementById('sell-modal').classList.add('hidden');
+      selectedItem = null;
+    }
+    function rememberBuyerOrderId(orderId) {
+      const ids = getBuyerOrderIds();
+      if (!ids.includes(orderId)) { ids.unshift(orderId); localStorage.setItem('taastore_buyer_order_ids', JSON.stringify(ids.slice(0,50))); }
+    }
+    async function submitSellRequest(e) {
+      e.preventDefault();
+      if (!selectedItem) return;
+      const qty = Math.max(1, parseInt(document.getElementById('sell-qty').value) || 1);
+      const sellerName = document.getElementById('sell-name').value.trim();
+      const whatsappNumber = normalizeWhatsAppNumber(document.getElementById('sell-wa').value.trim());
+      if (!whatsappNumber) { showToast('Nomor WhatsApp tidak valid. Gunakan contoh 081234567890.', true); return; }
+      const gameId = document.getElementById('sell-game-id').value.trim();
+      const note = document.getElementById('sell-note').value.trim();
+      const orderId = makeOrderId();
+      // World Drop is intentionally controlled by Admin and is not entered by the seller.
+      const order = { order_id: orderId, buyer_name: sellerName, product: selectedItem.name, qty, total: 0, grow_id: gameId, world: '', payment: 'SELL', whatsapp_number: whatsappNumber, status: 'WAITING_PAYMENT', created_at: new Date().toISOString(), paid_at: null, completed_at: null, order_type: 'SELL', sell_status: 'SELL_WAITING_CONFIRMATION', seller_note: note, sell_proof_data: null };
+      try {
+        await supabaseRequest('orders', { method:'POST', headers:{'Prefer':'return=minimal'}, body:JSON.stringify(order) });
+      } catch(err) {
+        const detail = [err.message, err.code ? `code: ${err.code}` : '', err.hint ? `hint: ${err.hint}` : ''].filter(Boolean).join(' | '); showToast(`Pengajuan gagal disimpan: ${detail || 'cek Supabase'}`, true); console.error('TAASTORE SELL insert error:', err); return;
+      }
+      const orders=getOrders(); orders.unshift(order); saveOrders(orders); rememberBuyerOrderId(orderId); localStorage.setItem('taastore_last_order_id', orderId);
+      const text = `💰 *FORM PENJUALAN TAASTORE*\n━━━━━━━━━━━━━━━━━━━━\n• *Order ID* : ${orderId}\n• *Nama Seller* : ${sellerName}\n• *Produk* : ${selectedItem.name}\n• *Jumlah* : ${qty} BGL/DL\n• *GrowID / ID Game* : ${gameId}\n• *Catatan* : ${note || '-'}\n━━━━━━━━━━━━━━━━━━━━\nMohon info *Rate Take* terbaru dan detail proses penjualan untuk order ini.\n\nTerima kasih! 🙏`;
+      window.open(`https://wa.me/6282123602358?text=${encodeURIComponent(text)}`,'_blank');
+      closeSellModal(); showToast(`Pengajuan ${orderId} dibuat. Cek pesanan untuk Setujui atau Batalkan.`); await loadBuyerOrders(); if(isAdmin) await loadAdminOrders();
+    }
+    async function cancelSellOrder(orderId) {
+      const order=await getOrderById(orderId);
+      if(!order || order.order_type!=='SELL' || (order.sell_status || order.status)!=='SELL_WAITING_CONFIRMATION') return;
+      if(!confirm(`Batalkan pengajuan ${orderId}?`)) return;
+      try { await supabaseRequest(`orders?order_id=eq.${encodeURIComponent(orderId)}`, {method:'PATCH',headers:{'Prefer':'return=minimal'},body:JSON.stringify({sell_status:'SELL_CANCELLED'})}); } catch(err){ showToast('Gagal membatalkan pengajuan.',true); return; }
+      const local=getOrders(); const i=local.findIndex(x=>x.order_id===orderId); if(i>=0){local[i].sell_status='SELL_CANCELLED';saveOrders(local);} await loadBuyerOrders(); if(isAdmin) await loadAdminOrders(); showToast(`Pengajuan ${orderId} dibatalkan.`);
+    }
+    async function agreeSellOrder(orderId) {
+      const order=await getOrderById(orderId);
+      if(!order || order.order_type!=='SELL' || (order.sell_status || order.status)!=='SELL_WAITING_CONFIRMATION') return;
+      if(!confirm('Saya sudah mengetahui dan menyetujui rate dari Admin. Lanjutkan ke tahap drop?')) return;
+      try { await supabaseRequest(`orders?order_id=eq.${encodeURIComponent(orderId)}`, {method:'PATCH',headers:{'Prefer':'return=minimal'},body:JSON.stringify({sell_status:'SELL_WAITING_DROP'})}); } catch(err){ showToast('Gagal melanjutkan penjualan.',true); return; }
+      const local=getOrders(); const i=local.findIndex(x=>x.order_id===orderId); if(i>=0){local[i].sell_status='SELL_WAITING_DROP';saveOrders(local);} await loadBuyerOrders(); if(isAdmin) await loadAdminOrders(); showToast('Penjualan dilanjutkan. Silakan lakukan drop lalu upload bukti.');
+    }
+    async function uploadSellProof(orderId, input) {
+      const file=input?.files?.[0]; if(!file) return;
+      if(file.size>5*1024*1024){showToast('Screenshot maksimal 5 MB.',true);input.value='';return;}
+      const reader=new FileReader(); reader.onload=async()=>{
+        try {
+          const img=new Image(); img.onload=async()=>{
+            const c=document.createElement('canvas'); const max=1400; const scale=Math.min(1,max/Math.max(img.width,img.height)); c.width=Math.round(img.width*scale); c.height=Math.round(img.height*scale); const ctx=c.getContext('2d'); ctx.drawImage(img,0,0,c.width,c.height); const data=c.toDataURL('image/jpeg',0.78);
+            await supabaseRequest(`orders?order_id=eq.${encodeURIComponent(orderId)}`, {method:'PATCH',headers:{'Prefer':'return=minimal'},body:JSON.stringify({sell_proof_data:data,sell_status:'SELL_PROOF_SUBMITTED'})});
+            const local=getOrders(); const i=local.findIndex(x=>x.order_id===orderId); if(i>=0){local[i].sell_proof_data=data;local[i].sell_status='SELL_PROOF_SUBMITTED';saveOrders(local);} await loadBuyerOrders(); if(isAdmin) await loadAdminOrders(); showToast('Bukti drop berhasil dikirim ke Admin.');
+          }; img.src=reader.result;
+        } catch(err){showToast('Gagal mengunggah bukti drop.',true);console.error(err);} } ; reader.readAsDataURL(file);
+    }
+
     function openCartModal(id) {
 
       playCyberBeep(900, 'sine', 0.06);
@@ -1231,6 +1360,24 @@
       for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
       return `TA-${code}`;
     }
+    function normalizeWhatsAppNumber(value) {
+      let digits = String(value || '').replace(/\D/g, '');
+      if (!digits) return '';
+      if (digits.startsWith('0')) digits = '62' + digits.slice(1);
+      else if (digits.startsWith('8')) digits = '62' + digits;
+      if (!digits.startsWith('62')) return '';
+      return digits;
+    }
+    function getOrderWhatsApp(order) {
+      return normalizeWhatsAppNumber(order?.whatsapp_number || order?.wa_number || '');
+    }
+    function openWhatsAppTarget(order, text) {
+      const target = getOrderWhatsApp(order);
+      const url = target ? `https://wa.me/${target}?text=${encodeURIComponent(text)}` : `https://wa.me/?text=${encodeURIComponent(text)}`;
+      window.open(url, '_blank');
+      return !!target;
+    }
+
     async function sendToWA(e) {
       e.preventDefault();
       playCyberBeep(1100, 'square', 0.1);
@@ -1238,13 +1385,15 @@
       const qty = Math.max(1, parseInt(document.getElementById("cart-qty").value) || 1);
       const total = selectedItem.price * qty;
       const buyerName = document.getElementById("buyer-name").value.trim();
+      const whatsappNumber = normalizeWhatsAppNumber(document.getElementById("buyer-wa").value.trim());
+      if (!whatsappNumber) { showToast("Nomor WhatsApp tidak valid. Gunakan contoh 081234567890.", true); return; }
       const gameId = document.getElementById("buyer-game-id").value.trim();
       const world = document.getElementById("buyer-world").value.trim();
       const payment = document.getElementById("buyer-payment").value;
       const orderId = makeOrderId();
       const order = {
         order_id: orderId, buyer_name: buyerName, product: selectedItem.name, qty, total,
-        grow_id: gameId, world, payment, status: "WAITING_PAYMENT", created_at: new Date().toISOString(), paid_at: null, completed_at: null
+        grow_id: gameId, world, payment, whatsapp_number: whatsappNumber, status: "WAITING_PAYMENT", created_at: new Date().toISOString(), paid_at: null, completed_at: null, order_type: "BUY"
       };
       try {
         await supabaseRequest("orders", {
@@ -1268,6 +1417,112 @@
       showToast(`Order ${orderId} dibuat. Order ID tersimpan otomatis.`);
       if (isAdmin) await loadAdminOrders();
     }
+    function sellStatusLabel(order) {
+      if (order.status === 'COMPLETED' || order.sell_status === 'SELL_COMPLETED') return 'SELESAI';
+      if (order.sell_status === 'SELL_CANCELLED') return 'DIBATALKAN';
+      if (order.sell_status === 'SELL_WAITING_DROP') return 'MENUNGGU DROP';
+      return 'MENUNGGU KONFIRMASI';
+    }
+    function buildAdminWhatsAppText(order, kind) {
+      const id = order.order_id || '-';
+      const product = order.product || '-';
+      const qty = Number(order.qty) || 0;
+      const world = order.world || '-';
+      const payment = order.payment || '-';
+      if (order.order_type === 'SELL') {
+        if (kind === 'rate') {
+          const rate = prompt(`Masukkan Rate Take untuk ${id}:`, '');
+          if (!rate) return null;
+          const rateNum = Number(String(rate).replace(/[^0-9]/g,'')) || 0;
+          const total = rateNum * qty;
+          return `Halo kak 👋\n\nTerima kasih sudah mengajukan penjualan di TAASTORE.\n\n━━━━━━━━━━━━━━━━━━━━\n🆔 Order ID: ${id}\n\n📦 Produk: ${product}\n🔢 Jumlah: ${qty} BGL/DL\n💰 Rate Take: Rp ${rateNum.toLocaleString('id-ID')} / BGL/DL\n💵 Total Pembayaran: Rp ${total.toLocaleString('id-ID')}\n━━━━━━━━━━━━━━━━━━━━\n\nMohon dicek kembali rate dan total pembayarannya ya kak.\n\nJika sudah sesuai dan ingin melanjutkan, silakan konfirmasi kepada kami.\n\nJika rate kurang sesuai, pengajuan dapat dibatalkan tanpa perlu melakukan drop.\n\nTerima kasih 🙏\n— TAASTORE`;
+        }
+        if (kind === 'payment') {
+          return `Halo kak 👋\n\nUntuk Order ID *${id}*, penjualan akan kami lanjutkan.\n\n📦 Produk: ${product}\n🔢 Jumlah: ${qty} BGL/DL\n\nUntuk pembayaran, kakak ingin menerima melalui metode apa?\n\nSilakan informasikan metode pembayaran beserta detail penerimaannya ya kak.\n\nSetelah itu kami berikan instruksi World Drop.\n\nTerima kasih 🙏\n— TAASTORE`;
+        }
+        if (kind === 'drop') {
+          return `Halo kak 👋\n\nOrder ID *${id}* sudah siap untuk proses drop.\n\n━━━━━━━━━━━━━━━━━━━━\n📦 Produk: ${product}\n🔢 Jumlah: ${qty} BGL/DL\n🌎 World: [ISI WORLD ADMIN]\n📦 Tempat: Display Box\n━━━━━━━━━━━━━━━━━━━━\n\nSilakan melakukan drop sesuai instruksi di atas.\n\nSetelah selesai, silakan kirim screenshot sebagai bukti ya kak.\n\nMohon pastikan produk dan jumlahnya sesuai sebelum melakukan drop.\n\nTerima kasih 🙏\n— TAASTORE`;
+        }
+        if (kind === 'received') {
+          return `Halo kak 👋\n\n✅ Drop untuk Order ID *${id}* sudah kami terima dan verifikasi.\n\n📦 Produk: ${product}\n🔢 Jumlah: ${qty} BGL/DL\n\nPembayaran akan kami proses sesuai metode pembayaran yang telah dikonfirmasi.\n\nTerima kasih 🙏\n— TAASTORE`;
+        }
+        return `Halo kak 👋\n\n✅ *TRANSAKSI SELESAI*\n\nOrder ID: *${id}*\n\n📦 ${product}\n🔢 ${qty} BGL/DL\n\nPembayaran telah kami proses.\n\nTerima kasih sudah menggunakan TAASTORE 🙏\n\n— TAASTORE`;
+      }
+      if (kind === 'payment') {
+        return `Halo kak 👋\n\nTerima kasih sudah melakukan pemesanan di TAASTORE.\n\n━━━━━━━━━━━━━━━━━━━━\n🆔 Order ID: ${id}\n\n📦 Produk: ${product}\n🔢 Jumlah: ${qty} BGL/DL\n💵 Total: Rp ${Number(order.total||0).toLocaleString('id-ID')}\n\n💳 Metode pembayaran: ${payment}\n━━━━━━━━━━━━━━━━━━━━\n\nSilakan melakukan pembayaran sesuai total pesanan di atas.\n\nSetelah pembayaran dilakukan, silakan kirim bukti pembayaran melalui chat ini.\n\nTerima kasih 🙏\n— TAASTORE`;
+      }
+      if (kind === 'paid') return `Halo kak 👋\n\n✅ Pembayaran untuk Order ID *${id}* sudah kami terima.\n\n📦 ${product}\n🔢 ${qty} BGL/DL\n💵 Rp ${Number(order.total||0).toLocaleString('id-ID')}\n\nPesanan sedang kami proses.\n\nTerima kasih 🙏\n— TAASTORE`;
+      if (kind === 'ready') return `Halo kak 👋\n\n✅ Pesanan Order ID *${id}* sudah siap.\n\n📦 ${product}\n🔢 ${qty} BGL/DL\n\nSilakan datang ke:\n🌎 World: ${world}\n\nItem sudah dapat diambil.\n\nTerima kasih 🙏\n— TAASTORE`;
+      return `Halo kak 👋\n\n✅ *TRANSAKSI SELESAI*\n\nOrder ID: *${id}*\n\n📦 ${product}\n🔢 ${qty} BGL/DL\n💵 Rp ${Number(order.total||0).toLocaleString('id-ID')}\n\nTerima kasih sudah menggunakan TAASTORE 🙏\n\n— TAASTORE`;
+    }
+    function openAdminWhatsApp(orderId, kind) {
+      if (!isAdmin) return;
+      const order = getOrders().find(o => String(o.order_id) === String(orderId));
+      if (!order) { showToast('Detail order tidak ditemukan di perangkat admin.', true); return; }
+      const text = buildAdminWhatsAppText(order, kind);
+      if (!text) return;
+      const targeted = openWhatsAppTarget(order, text);
+      if (!targeted) showToast('Nomor WhatsApp order belum tersedia; WhatsApp dibuka tanpa target.', true);
+    }
+    window.taastoreSellProofCache = window.taastoreSellProofCache || {};
+    function openSellProof(orderId) {
+      if (!isAdmin) return;
+      const id = String(orderId || '');
+      const order = getOrders().find(o => String(o.order_id) === id);
+      const data = window.taastoreSellProofCache[id] || order?.sell_proof_data;
+      if (!data || typeof data !== 'string' || !data.startsWith('data:image/')) {
+        showToast('Bukti drop tidak tersedia atau format gambar tidak valid.', true);
+        return;
+      }
+      const modal = document.getElementById('sell-proof-modal');
+      const image = document.getElementById('sell-proof-image');
+      const label = document.getElementById('sell-proof-order-id');
+      if (!modal || !image) return;
+      label.textContent = id;
+      image.onload = () => modal.classList.remove('hidden');
+      image.onerror = () => { image.removeAttribute('src'); showToast('Gambar bukti tidak dapat ditampilkan.', true); };
+      image.src = data;
+    }
+    function closeSellProof() {
+      const modal = document.getElementById('sell-proof-modal');
+      const image = document.getElementById('sell-proof-image');
+      if (modal) modal.classList.add('hidden');
+      if (image) { image.onload = null; image.onerror = null; image.removeAttribute('src'); }
+    }
+
+    function adminOrderIsHistory(o) {
+      const isSell = o.order_type === 'SELL' || o.payment === 'SELL';
+      if (isSell) return o.sell_status === 'SELL_CANCELLED' || o.sell_status === 'SELL_COMPLETED' || o.status === 'COMPLETED';
+      return o.status === 'COMPLETED';
+    }
+    function adminOrderCard(o) {
+      const isSell = o.order_type === 'SELL' || o.payment === 'SELL';
+      const statusText = isSell ? sellStatusLabel(o) : (o.status === 'COMPLETED' ? 'SELESAI' : 'MENUNGGU');
+      const statusClass = statusText === 'SELESAI' ? 'border-emerald-700/50 text-emerald-300 bg-emerald-950/40' : statusText === 'DIBATALKAN' ? 'border-rose-700/50 text-rose-300 bg-rose-950/30' : 'border-amber-700/50 text-amber-300 bg-amber-950/30';
+      let buttons = '';
+      if (isSell) {
+        if (statusText === 'MENUNGGU KONFIRMASI') buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','rate')" class="text-[10px] px-2.5 py-2 rounded-lg bg-amber-500 text-slate-950 font-black">💬 Konfirmasi Rate</button>`;
+        if (statusText === 'MENUNGGU DROP') buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','payment')" class="text-[10px] px-2.5 py-2 rounded-lg border border-cyan-500/30 text-cyan-300">💳 Tanya Payment</button><button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','drop')" class="text-[10px] px-2.5 py-2 rounded-lg bg-cyan-600/80 text-white font-bold">📦 Instruksi Drop</button>`;
+        if (o.sell_proof_data) buttons += `<button type="button" onclick="openSellProof('${escapeReviewText(o.order_id)}')" class="text-[10px] px-2.5 py-2 rounded-lg border border-cyan-500/30 text-cyan-300">📷 Lihat Bukti</button><button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','received')" class="text-[10px] px-2.5 py-2 rounded-lg border border-blue-500/30 text-blue-300">💬 Drop Diterima</button>`;
+        if (statusText !== 'DIBATALKAN' && statusText !== 'SELESAI') buttons += `<button type="button" onclick="completeOrder('${escapeReviewText(o.order_id)}')" class="text-[10px] px-2.5 py-2 rounded-lg bg-emerald-600/80 text-white font-bold">✓ Selesai / Bayar</button>`;
+        if (statusText === 'SELESAI') buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','done')" class="text-[10px] px-2.5 py-2 rounded-lg border border-emerald-500/30 text-emerald-300">💬 Selesai</button>`;
+      } else {
+        if (o.status !== 'COMPLETED') buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','payment')" class="text-[10px] px-2.5 py-2 rounded-lg bg-amber-500 text-slate-950 font-black">💳 Kirim Pembayaran</button><button type="button" onclick="completeOrder('${escapeReviewText(o.order_id)}')" class="text-[10px] px-2.5 py-2 rounded-lg bg-emerald-600/80 text-white font-bold">✓ Selesai</button>`;
+        else buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','done')" class="text-[10px] px-2.5 py-2 rounded-lg border border-emerald-500/30 text-emerald-300">💬 Selesai</button>`;
+      }
+      const wa = getOrderWhatsApp(o);
+      const customerLabel = isSell ? (o.buyer_name || '-') : (o.buyer_name || '-');
+      return `<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div class="min-w-0">
+          <div class="flex flex-wrap items-center gap-2"><span class="text-[11px] font-bold text-slate-500 font-mono">${escapeReviewText(o.order_id)}</span><span class="text-[10px] px-2 py-0.5 rounded-md border ${statusClass}">${statusText}</span><span class="text-[10px] px-2 py-0.5 rounded-md border border-cyan-700/40 text-cyan-300 bg-cyan-950/20">${isSell ? '💰 SELL' : '🛒 BUY'}</span></div>
+          <p class="text-xs text-slate-200 mt-1 font-semibold">${escapeReviewText(o.product)} · ${Number(o.qty)||0}x ${isSell ? '' : `· Rp ${Number(o.total||0).toLocaleString('id-ID')}`}</p>
+          <p class="text-[10px] text-slate-500 mt-1">${escapeReviewText(customerLabel)} · GrowID: ${escapeReviewText(o.grow_id || '-')} · ${wa ? 'WA terhubung' : 'WA belum tersimpan'}</p>
+          ${isSell && o.sell_proof_data ? `<button type="button" onclick="openSellProof('${escapeReviewText(o.order_id)}')" class="text-[10px] text-cyan-300 underline mt-1">Lihat Bukti Drop</button>` : ''}
+        </div>
+        <div class="shrink-0 flex flex-wrap gap-2 justify-end">${buttons}</div>
+      </div>`;
+    }
+
     async function loadAdminOrders() {
       const panel = document.getElementById("admin-orders-panel");
       const list = document.getElementById("admin-orders-list");
@@ -1279,19 +1534,22 @@
       if (!Array.isArray(orders) || !orders.length) {
         list.innerHTML = '<p class="text-xs text-slate-500 py-4">Belum ada pesanan tersimpan.</p>'; return;
       }
-      list.innerHTML = orders.map((o, i) => `
-        <div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><span class="font-bold text-amber-400 text-sm">${escapeReviewText(o.order_id)}</span><span class="text-[10px] px-2 py-0.5 rounded-md border ${o.status === 'COMPLETED' ? 'border-emerald-700/50 text-emerald-300 bg-emerald-950/40' : 'border-amber-700/50 text-amber-300 bg-amber-950/30'}">${o.status === 'COMPLETED' ? 'SELESAI' : 'MENUNGGU'}</span></div>
-          <p class="text-xs text-slate-300 mt-1">${escapeReviewText(o.buyer_name)} · ${escapeReviewText(o.product)} · ${o.qty}x · Rp ${Number(o.total).toLocaleString('id-ID')}</p>
-          <p class="text-[10px] text-slate-500 mt-1">GrowID: ${escapeReviewText(o.grow_id)} · World: ${escapeReviewText(o.world)} · ${escapeReviewText(o.payment)}</p></div>
-          ${o.status === 'COMPLETED' ? '<span class="text-[10px] text-emerald-400 font-semibold">✓ Customer dapat review</span>' : `<button type="button" onclick="completeOrder('${escapeReviewText(o.order_id)}')" class="text-xs px-3 py-2 rounded-lg bg-emerald-600/80 hover:bg-emerald-600 text-white font-bold border border-emerald-500/30">Tandai Order Selesai</button>`}
-        </div>`).join('');
+      const local = getOrders();
+      orders.forEach(o => { const i = local.findIndex(x => x.order_id === o.order_id); if (i >= 0) local[i] = {...local[i], ...o}; else local.unshift(o); if (o.sell_proof_data) window.taastoreSellProofCache[String(o.order_id)] = o.sell_proof_data; });
+      saveOrders(local);
+      const active = orders.filter(o => !adminOrderIsHistory(o));
+      const history = orders.filter(adminOrderIsHistory);
+      list.innerHTML = `${active.length ? `<div class="space-y-3">${active.map(adminOrderCard).join('')}</div>` : '<p class="text-xs text-slate-500 py-3">Tidak ada order aktif.</p>'}
+        ${history.length ? `<details class="mt-5 rounded-xl border border-slate-800 bg-slate-950/30"><summary class="cursor-pointer select-none px-3 py-2.5 text-xs font-bold text-slate-400">📁 Riwayat (${history.length})</summary><div class="p-3 pt-0 space-y-3">${history.map(adminOrderCard).join('')}</div></details>` : ''}`;
     }
     async function completeOrder(orderId) {
       if (!isAdmin || !orderId) return;
       try {
-        await supabaseRequest(`orders?order_id=eq.${encodeURIComponent(orderId)}`, { method: "PATCH", headers: { "Prefer": "return=minimal" }, body: JSON.stringify({ status: "COMPLETED", completed_at: new Date().toISOString() }) });
-        const local = getOrders(); const idx = local.findIndex(o => o.order_id === orderId); if (idx >= 0) { local[idx].status = "COMPLETED"; local[idx].completed_at = new Date().toISOString(); saveOrders(local); }
+        const existing = getOrders().find(o=>o.order_id===orderId) || {};
+        const patch = { status: "COMPLETED", completed_at: new Date().toISOString() };
+        if (existing.order_type === 'SELL') patch.sell_status = 'SELL_COMPLETED';
+        await supabaseRequest(`orders?order_id=eq.${encodeURIComponent(orderId)}`, { method: "PATCH", headers: { "Prefer": "return=minimal" }, body: JSON.stringify(patch) });
+        const local = getOrders(); const idx = local.findIndex(o => o.order_id === orderId); if (idx >= 0) { Object.assign(local[idx], patch); saveOrders(local); }
         await loadAdminOrders(); await loadBuyerOrders(); showToast(`Order ${orderId} ditandai selesai.`);
       } catch (err) {
         const detail = [err.message, err.code ? `code: ${err.code}` : "", err.hint ? `hint: ${err.hint}` : ""].filter(Boolean).join(" | ");
@@ -1394,6 +1652,17 @@
   </script>
 
   <!-- FITUR 1 & FITUR 2: CYBER-AUDIO REACTIVE VISUALIZER, LO-FI CHILL BGM & OVERDRIVE PANIC SIREN ENGINE -->
+  <!-- SELL proof preview modal -->
+  <div id="sell-proof-modal" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 z-[80]" onclick="if(event.target===this) closeSellProof()">
+    <div class="relative w-full max-w-4xl max-h-[92vh] rounded-2xl border border-cyan-500/30 bg-slate-950/95 shadow-2xl p-3 sm:p-4">
+      <button type="button" onclick="closeSellProof()" class="absolute right-3 top-3 z-10 w-9 h-9 rounded-full bg-slate-900/90 border border-slate-700 text-slate-200 hover:text-white" aria-label="Tutup">✕</button>
+      <div class="text-xs font-black uppercase tracking-wider text-cyan-300 px-2 pb-3">📷 Bukti Drop — <span id="sell-proof-order-id"></span></div>
+      <div class="rounded-xl border border-slate-800 bg-slate-900/50 overflow-auto max-h-[78vh] flex items-center justify-center p-2">
+        <img id="sell-proof-image" src="" alt="Bukti drop seller" class="max-w-full max-h-[74vh] object-contain rounded-lg" />
+      </div>
+    </div>
+  </div>
+
   <script>
     let isBgmPlaying = false;
     let bgmOscillator = null;
