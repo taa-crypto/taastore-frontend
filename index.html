@@ -442,7 +442,7 @@
             <option value="limited">Limited</option>
             <option value="empty">Out of Stock</option>
           </select>
-          <input type="number" id="item-stock-qty" min="0" step="0.01" placeholder="Stok BGL (1 BGL = 100 DL)" class="bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-sm focus:outline-none focus:border-amber-400">
+          <input type="text" id="item-stock-qty" inputmode="decimal" placeholder="Stok BGL (1 BGL = 100 DL)" class="bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-sm focus:outline-none focus:border-amber-400">
           
           <div class="flex gap-2 col-span-1 md:col-span-3">
             <button type="submit" id="form-btn" class="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold p-2.5 rounded-xl text-sm shadow-lg shadow-amber-500/20">Tambah Produk</button>
@@ -2262,7 +2262,7 @@
 🆔 *Order ID* : ${order.order_id}
 👤 *Nama* : ${order.buyer_name||'-'}
 📦 *Produk* : ${order.product||'-'}
-🔢 *Jumlah* : ${isSell ? `${getSellDisplayQty(order)} ${getSellUnit(order)} (${getSellEquivalentDL(order)} DL)` : `${Number(order.qty)||0}x`}
+🔢 *Jumlah* : ${Number(order.qty)||0}x
 💰 *Total* : Rp ${Number(order.total||0).toLocaleString('id-ID')}
 🎮 *GrowID* : ${order.grow_id||'-'}
 🌎 *World* : ${order.world||'-'}
@@ -2315,7 +2315,7 @@ Terima kasih 🙏`;
         return `Halo kak 👋\n\n✅ *TRANSAKSI SELESAI*\n\nOrder ID: *${id}*\n\n📦 ${product}\n🔢 ${qty} BGL/DL\n\nPembayaran telah kami proses.\n\nTerima kasih sudah menggunakan TAASTORE 🙏\n\n— TAASTORE`;
       }
       if (kind === 'payment') {
-        return `Halo kak 👋\n\nTerima kasih sudah melakukan pemesanan di TAASTORE.\n\n━━━━━━━━━━━━━━━━━━━━\n🆔 Order ID: ${id}\n\n📦 Produk: ${product}\n🔢 Jumlah: ${sellQty} ${sellUnit} (${equivalentDL} DL)\n💵 Total: Rp ${Number(order.total||0).toLocaleString('id-ID')}\n\n💳 Metode pembayaran: ${payment}\n━━━━━━━━━━━━━━━━━━━━\n\nSilakan melakukan pembayaran sesuai total pesanan di atas.\n\nSetelah pembayaran, upload bukti pembayaran pada halaman order di website TAASTORE, lalu gunakan tombol Konfirmasi via WhatsApp.\n\nTerima kasih 🙏\n— TAASTORE`;
+        return `Halo kak 👋\n\nTerima kasih sudah melakukan pemesanan di TAASTORE.\n\n━━━━━━━━━━━━━━━━━━━━\n🆔 Order ID: ${id}\n\n📦 Produk: ${product}\n🔢 Jumlah: ${qty}x\n💵 Total: Rp ${Number(order.total||0).toLocaleString('id-ID')}\n\n💳 Metode pembayaran: ${payment}\n━━━━━━━━━━━━━━━━━━━━\n\nSilakan melakukan pembayaran sesuai total pesanan di atas.\n\nSetelah pembayaran, upload bukti pembayaran pada halaman order di website TAASTORE, lalu gunakan tombol Konfirmasi via WhatsApp.\n\nTerima kasih 🙏\n— TAASTORE`;
       }
       if (kind === 'paid') return `Halo kak 👋\n\n✅ Pembayaran untuk Order ID *${id}* sudah kami terima.\n\n📦 ${product}\n🔢 ${qty} BGL/DL\n💵 Rp ${Number(order.total||0).toLocaleString('id-ID')}\n\nPesanan sedang kami proses.\n\nTerima kasih 🙏\n— TAASTORE`;
       if (kind === 'ready') return `Halo kak 👋\n\n✅ Pesanan Order ID *${id}* sudah siap.\n\n📦 ${product}\n🔢 ${qty} BGL/DL\n\nSilakan datang ke:\n🌎 World: ${world}\n\nItem sudah dapat diambil.\n\nTerima kasih 🙏\n— TAASTORE`;
@@ -2391,12 +2391,12 @@ Terima kasih 🙏`;
     function adminOrderIsHistory(o) {
       const isSell = o.order_type === 'SELL' || o.payment === 'SELL';
       if (isSell) return o.sell_status === 'SELL_CANCELLED' || o.sell_status === 'SELL_COMPLETED' || o.status === 'COMPLETED';
-      return o.status === 'COMPLETED';
+      return o.status === 'COMPLETED' || o.status === 'EXPIRED';
     }
     function adminOrderCard(o) {
       const isSell = o.order_type === 'SELL' || o.payment === 'SELL';
       const isHistory = adminOrderIsHistory(o);
-      const statusText = isSell ? sellStatusLabel(o) : (o.status === 'COMPLETED' ? 'SELESAI' : (o.status === 'PAID' ? 'PEMBAYARAN DITERIMA' : 'MENUNGGU PEMBAYARAN'));
+      const statusText = isSell ? sellStatusLabel(o) : (o.status === 'COMPLETED' ? 'SELESAI' : (o.status === 'EXPIRED' ? 'EXPIRED' : (o.status === 'PAID' ? 'PEMBAYARAN DITERIMA' : 'MENUNGGU PEMBAYARAN')));
       const statusClass = statusText === 'SELESAI' ? 'border-emerald-700/50 text-emerald-300 bg-emerald-950/40' : statusText === 'DIBATALKAN' ? 'border-rose-700/50 text-rose-300 bg-rose-950/30' : 'border-amber-700/50 text-amber-300 bg-amber-950/30';
       let buttons = '';
       if (isSell) {
@@ -2595,11 +2595,11 @@ Terima kasih 🙏`;
       const stockRaw = document.getElementById("item-stock-qty").value;
       const isBglBuy = type === 'beli' && /blue gem lock/i.test(name);
       const isDlBuy = type === 'beli' && /diamond lock/i.test(name);
-      const enteredBgl = stockRaw === '' ? null : Math.max(0, Number(stockRaw) || 0);
+      const enteredBgl = stockRaw === '' ? null : Math.max(0, Number(String(stockRaw).replace(',', '.')) || 0);
       const stock_quantity = isBglBuy && enteredBgl !== null ? Math.round(enteredBgl * 100) : (isDlBuy ? null : (enteredBgl === null ? null : Math.floor(enteredBgl)));
       const displayBgl = isBglBuy && enteredBgl !== null ? enteredBgl : (isDlBuy ? (getUnifiedLockStockDL() === null ? null : getUnifiedLockStockDL()/100) : enteredBgl);
-      const statusBase = isBglBuy ? displayBgl : stock_quantity;
-      const stock_status = statusBase === 0 ? 'empty' : statusBase !== null && statusBase <= 3 ? 'limited' : 'ready';
+      const statusBase = isBglBuy ? stock_quantity : stock_quantity;
+      const stock_status = statusBase === 0 ? 'empty' : statusBase !== null && statusBase <= 100 ? 'limited' : 'ready';
       const payload = { name, price, image_url, type, stock_status, stock_quantity };
       if (isDlBuy) delete payload.stock_quantity;
       const headers = { "Content-Type": "application/json", "x-admin-key": adminKey };
