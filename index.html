@@ -391,11 +391,41 @@
         </div>
       </div>
 
+      <!-- Service Status Banner -->
+      <div id="store-status-banner" class="hidden mb-6 rounded-2xl border p-4 shadow-xl backdrop-blur-md" role="status" aria-live="polite">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div class="min-w-0">
+            <div id="store-status-title" class="font-black text-sm text-white"></div>
+            <div id="store-status-message" class="text-xs text-slate-300 mt-1"></div>
+          </div>
+          <a id="store-status-channel" href="https://whatsapp.com/channel/0029Vb6t9LsKmCPSxiav7j00" target="_blank" rel="noopener noreferrer" class="hidden shrink-0 text-xs font-black px-3 py-2 rounded-xl border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10">Channel TAASTORE</a>
+        </div>
+      </div>
+
       <!-- Panel Admin -->
       <section id="admin-panel" class="hidden mb-10 bg-slate-900/90 backdrop-blur-md p-6 rounded-2xl border border-amber-500/50 shadow-2xl">
         <div class="flex justify-between items-center mb-4 border-b border-slate-800 pb-3">
           <h2 class="text-lg font-bold text-amber-400">Panel Manajemen Produk (Protected)</h2>
           <button onclick="logoutAdmin()" class="text-xs bg-rose-900/80 text-rose-300 px-3 py-1.5 rounded-lg border border-rose-700/50 hover:bg-rose-800">Logout Admin</button>
+        </div>
+        <div class="mb-6 rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+          <div class="flex flex-col lg:flex-row lg:items-end gap-3">
+            <div class="flex-1">
+              <div class="text-xs font-black text-white mb-1">Status Layanan</div>
+              <div class="text-[10px] text-slate-500 mb-2">Mengatur apakah customer dapat membuat BUY/SELL baru.</div>
+              <select id="store-status-select" onchange="changeStoreStatus(this.value)" class="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-sm focus:outline-none focus:border-amber-400">
+                <option value="OPEN">🟢 OPEN</option>
+                <option value="CLOSED">🔴 CLOSED</option>
+                <option value="UNAVAILABLE">🟡 TEMPORARILY UNAVAILABLE</option>
+                <option value="GAME_MAINTENANCE">🎮 GAME MAINTENANCE</option>
+              </select>
+            </div>
+            <div class="flex-1">
+              <div class="text-xs font-black text-white mb-1">Announcement</div>
+              <div id="store-announcement-preview" class="text-[10px] leading-relaxed text-slate-400 bg-slate-950 border border-slate-800 rounded-xl p-3 min-h-[72px] whitespace-pre-line"></div>
+            </div>
+            <button type="button" onclick="copyStoreAnnouncement()" class="shrink-0 bg-cyan-600/80 hover:bg-cyan-600 text-white font-black text-xs px-4 py-2.5 rounded-xl border border-cyan-500/30">Copy Announcement</button>
+          </div>
         </div>
         <form id="item-form" onsubmit="saveItem(event)" class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
           <input type="hidden" id="item-id">
@@ -559,6 +589,7 @@
               </select>
             </div>
             <div class="bg-slate-950/90 p-3.5 rounded-2xl border border-slate-800 mt-2">
+              <div class="text-xs text-amber-300 mb-2 font-bold" id="payment-countdown"></div>
               <div class="text-xs text-slate-400 mb-0.5">Total Pembayaran:</div>
               <div class="text-2xl font-black text-amber-400" id="cart-total-price">Rp 0</div>
             </div>
@@ -819,6 +850,83 @@
     const ITEMS_CACHE_KEY = "taastore_items_cache_v2";
     const ITEMS_CACHE_MAX_AGE = 5 * 60 * 1000;
     let itemsLoadPromise = null;
+    const STORE_STATUS_KEY = 'taastore_store_status_cache';
+    const TAASTORE_CHANNEL_URL = 'https://whatsapp.com/channel/0029Vb6t9LsKmCPSxiav7j00';
+    let storeStatus = 'OPEN';
+    const STORE_STATUS_META = {
+      OPEN: { title:'', message:'', className:'', announcement:'' },
+      CLOSED: {
+        title:'🔴 BUY & SELL — CLOSED',
+        message:'Untuk sementara, layanan transaksi TAASTORE.GT sedang ditutup.',
+        className:'border-rose-500/30 bg-rose-950/30',
+        announcement:`_💎 TAASTORE.GT_\n\n*🔴 BUY & SELL — CLOSED*\n\nUntuk sementara, layanan transaksi TAASTORE.GT sedang ditutup.\n\n📢 Informasi mengenai pembukaan kembali layanan akan kami update melalui channel ini.\n\nMohon cek channel untuk informasi terbaru.\n\n_Thank you for your patience. 🙏_\n\nTAASTORE.GT`
+      },
+      UNAVAILABLE: {
+        title:'🟡 TEMPORARILY UNAVAILABLE',
+        message:'Layanan BUY & SELL sementara tidak dapat diproses. Silakan kembali lagi nanti.',
+        className:'border-amber-500/30 bg-amber-950/20',
+        announcement:`_💎 TAASTORE.GT_\n\n*🟡 TEMPORARILY UNAVAILABLE*\n\nUntuk sementara, layanan *BUY & SELL* TAASTORE.GT tidak dapat diproses karena kendala operasional.\n\nLayanan akan kembali tersedia setelah TAASTORE.GT dapat beroperasi seperti biasa.\n\n📢 Update selanjutnya akan diinformasikan melalui channel ini.\n\n_Mohon maaf atas kendalanya dan terima kasih atas pengertiannya. 🙏_\n\nTAASTORE.GT`
+      },
+      GAME_MAINTENANCE: {
+        title:'🎮 GAME MAINTENANCE',
+        message:'Growtopia sedang dalam maintenance. BUY & SELL sementara tidak dapat diproses.',
+        className:'border-cyan-500/30 bg-cyan-950/20',
+        announcement:`_💎 TAASTORE.GT_\n\n*🎮 GAME MAINTENANCE*\n\nGrowtopia sedang dalam maintenance.\n\nUntuk sementara, layanan *BUY & SELL* TAASTORE.GT tidak dapat diproses sampai server Growtopia kembali online.\n\n📢 Kami akan menginformasikan kembali setelah layanan dapat berjalan seperti biasa.\n\n_Thank you for your patience. 🙏_\n\nTAASTORE.GT`
+      }
+    };
+    STORE_STATUS_META.OPEN.announcement = `_💎 TAASTORE.GT_\n\n*🟢 BUY & SELL — OPEN*\n\nLayanan transaksi TAASTORE.GT telah kembali dibuka.\n\n📊 Rate terbaru akan selalu diperbarui melalui channel ini.\n\nSilakan melakukan transaksi melalui website TAASTORE.GT.\n\n_Thank you for your support. 🙏_\n\nTAASTORE.GT`;
+    function getCachedStoreStatus(){ try { const v=localStorage.getItem(STORE_STATUS_KEY); return STORE_STATUS_META[v] ? v : 'OPEN'; } catch(_){ return 'OPEN'; } }
+    function applyStoreStatusUI(){
+      const meta=STORE_STATUS_META[storeStatus] || STORE_STATUS_META.OPEN;
+      const banner=document.getElementById('store-status-banner');
+      const title=document.getElementById('store-status-title');
+      const message=document.getElementById('store-status-message');
+      const channel=document.getElementById('store-status-channel');
+      const select=document.getElementById('store-status-select');
+      const preview=document.getElementById('store-announcement-preview');
+      if(select) select.value=storeStatus;
+      if(preview) preview.textContent=meta.announcement;
+      if(!banner) return;
+      banner.className='mb-6 rounded-2xl border p-4 shadow-xl backdrop-blur-md ' + (meta.className || 'hidden');
+      if(storeStatus==='OPEN'){ banner.classList.add('hidden'); }
+      else {
+        banner.classList.remove('hidden');
+        if(title) title.textContent=meta.title;
+        if(message) message.textContent=meta.message;
+        if(channel){ channel.href=TAASTORE_CHANNEL_URL; channel.classList.remove('hidden'); }
+      }
+      filterProducts();
+    }
+    async function loadStoreStatus(){
+      storeStatus=getCachedStoreStatus();
+      applyStoreStatusUI();
+      try {
+        const rows=await supabaseRequest('store_settings?select=id,status&id=eq.1&limit=1');
+        if(Array.isArray(rows) && rows[0] && STORE_STATUS_META[rows[0].status]){
+          storeStatus=rows[0].status;
+          localStorage.setItem(STORE_STATUS_KEY,storeStatus);
+          applyStoreStatusUI();
+        }
+      } catch(err){ console.warn('TAASTORE store status load failed:',err); }
+    }
+    async function changeStoreStatus(next){
+      if(!isAdmin) return;
+      if(!STORE_STATUS_META[next]) return;
+      storeStatus=next;
+      localStorage.setItem(STORE_STATUS_KEY,next);
+      applyStoreStatusUI();
+      try {
+        await supabaseRequest('store_settings?on_conflict=id',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({id:1,status:next,updated_at:new Date().toISOString()})});
+        showToast(`Status layanan diubah ke ${next}.`);
+      } catch(err){ showToast(`Status tersimpan lokal, tetapi gagal disimpan ke server: ${err.message||'cek Supabase'}`,true); console.error(err); }
+    }
+    function isStoreOpen(){ return storeStatus==='OPEN'; }
+    function guardNewTransaction(){ if(isStoreOpen()) return true; const meta=STORE_STATUS_META[storeStatus]||STORE_STATUS_META.CLOSED; showToast(meta.message || 'Layanan sedang tidak tersedia.',true); return false; }
+    async function copyStoreAnnouncement(){
+      const text=(STORE_STATUS_META[storeStatus]||STORE_STATUS_META.OPEN).announcement;
+      try { await navigator.clipboard.writeText(text); showToast('Announcement berhasil disalin.'); }
+      catch(_){ const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); showToast('Announcement berhasil disalin.'); }
+    }
 
     function renderCachedItems() {
       try {
@@ -1320,9 +1428,9 @@
           </div>
           <div>
             ${isJualItem(item) ? `
-              <button type="button" onclick="openSellModal(${item.id})" class="w-full inline-flex items-center justify-center gap-2 text-center bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-lg shadow-amber-500/10 font-bold py-2.5 px-4 rounded-xl transition duration-200">
+              ${isStoreOpen() ? `<button type="button" onclick="openSellModal(${item.id})" class="w-full inline-flex items-center justify-center gap-2 text-center bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-lg shadow-amber-500/10 font-bold py-2.5 px-4 rounded-xl transition duration-200">
                 <img src="${localItemImage}" alt="" class="w-5 h-5 object-contain [image-rendering:pixelated]" aria-hidden="true">Ajukan Penjualan
-              </button>
+              </button>` : `<button type="button" disabled class="w-full inline-flex items-center justify-center gap-2 text-center bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50 font-bold py-2.5 px-4 rounded-xl">Layanan Sementara Ditutup</button>`}
             ` : (isOut ? `
               <button type="button" disabled class="w-full inline-flex items-center justify-center gap-2 text-center bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50 font-bold py-2.5 px-4 rounded-xl">
                 <span class="w-5 h-5 inline-flex items-center justify-center">×</span>Stok Habis
@@ -1455,6 +1563,61 @@
       return ids;
     }
 
+    function formatCountdown(ms){
+      const total=Math.max(0,Math.floor(ms/1000));
+      const m=Math.floor(total/60), sec=total%60;
+      return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+    }
+    function getPaymentRemainingMs(order){
+      if(!order || order.status!=='WAITING_PAYMENT' || order.buyer_proof_data) return null;
+      const deadline=Date.parse(order.payment_deadline || '');
+      if(!Number.isFinite(deadline)) return null;
+      return deadline-Date.now();
+    }
+    async function restoreExpiredBuyStock(order){
+      if(!order || order.order_type==='SELL' || order.stock_restored) return true;
+      const items=Array.isArray(order.cart_items)&&order.cart_items.length ? order.cart_items : [];
+      if(!items.length) return true;
+      for(const cart of items){
+        const qty=Math.max(0,Math.floor(Number(cart.qty)||0));
+        if(qty<=0) continue;
+        const item=itemsData.find(x=>String(x.id)===String(cart.product_id));
+        if(!item) continue;
+        const kind=lockKind(item);
+        if(kind==='BGL' || kind==='DL'){
+          const totalDL=getUnifiedLockStockDL();
+          if(totalDL!==null) await setUnifiedLockStockDL(totalDL + (kind==='BGL'?qty*100:qty));
+        } else {
+          const rows=await supabaseRequest(`product_stock?select=product_id,stock_quantity&product_id=eq.${encodeURIComponent(cart.product_id)}&limit=1`);
+          const current=Array.isArray(rows)&&rows[0]?Math.max(0,Math.floor(Number(rows[0].stock_quantity)||0)):0;
+          await saveRemoteStock(cart.product_id,current+qty);
+        }
+      }
+      return true;
+    }
+    async function expireOldBuyOrders(){
+      try {
+        const rows=await supabaseRequest("orders?select=*&status=eq.WAITING_PAYMENT&order_type=eq.BUY&order=created_at.asc");
+        if(!Array.isArray(rows)) return;
+        for(const order of rows){
+          if(order.buyer_proof_data) continue;
+          const remaining=getPaymentRemainingMs(order);
+          if(remaining===null || remaining>0) continue;
+          try {
+            await restoreExpiredBuyStock(order);
+            await supabaseRequest(`orders?order_id=eq.${encodeURIComponent(order.order_id)}&status=eq.WAITING_PAYMENT&stock_restored=eq.false`,{method:'PATCH',headers:{'Prefer':'return=minimal'},body:JSON.stringify({status:'EXPIRED',stock_restored:true})});
+            const local=getOrders(),i=local.findIndex(x=>x.order_id===order.order_id);
+            if(i>=0){local[i].status='EXPIRED';local[i].stock_restored=true;saveOrders(local);}
+          } catch(err){ console.warn('TAASTORE expire order failed:',order.order_id,err); }
+        }
+        await loadRemoteStock();
+      }catch(err){ console.warn('TAASTORE expiry scan failed:',err); }
+    }
+    function startPaymentExpiryWatcher(){
+      expireOldBuyOrders();
+      if(window.taastorePaymentExpiryTimer) clearInterval(window.taastorePaymentExpiryTimer);
+      window.taastorePaymentExpiryTimer=setInterval(()=>{ expireOldBuyOrders(); loadBuyerOrders(); },15000);
+    }
     async function loadBuyerOrders() {
       const list = document.getElementById("buyer-orders-list");
       if (!list) return;
@@ -1478,9 +1641,10 @@
         const done = order.status === 'COMPLETED' || (isSell && order.sell_status === 'SELL_COMPLETED');
         const sellStatus = order.sell_status || order.status;
         const cancelled = isSell && sellStatus === 'SELL_CANCELLED';
-        const statusClass = done ? 'border-emerald-700/50 text-emerald-300 bg-emerald-950/40' : cancelled ? 'border-rose-700/50 text-rose-300 bg-rose-950/30' : 'border-amber-700/50 text-amber-300 bg-amber-950/30';
+        const expired = !isSell && order.status === 'EXPIRED';
+        const statusClass = done ? 'border-emerald-700/50 text-emerald-300 bg-emerald-950/40' : (cancelled || expired) ? 'border-rose-700/50 text-rose-300 bg-rose-950/30' : 'border-amber-700/50 text-amber-300 bg-amber-950/30';
         const sellStatusMap = {SELL_WAITING_CONFIRMATION:'MENUNGGU KONFIRMASI',SELL_WAITING_DROP:'MENUNGGU DROP',SELL_PROOF_SUBMITTED:'BUKTI DROP TERKIRIM',SELL_CANCELLED:'DIBATALKAN',SELL_COMPLETED:'SELESAI'};
-        const statusText = done ? 'SELESAI' : (isSell ? (sellStatusMap[sellStatus] || 'MENUNGGU') : (order.status === 'PAID' ? 'PEMBAYARAN DITERIMA' : (order.buyer_proof_data ? 'BUKTI PEMBAYARAN TERKIRIM' : 'MENUNGGU PEMBAYARAN')));
+        const statusText = done ? 'SELESAI' : (expired ? 'WAKTU PEMBAYARAN HABIS' : (isSell ? (sellStatusMap[sellStatus] || 'MENUNGGU') : (order.status === 'PAID' ? 'PEMBAYARAN DITERIMA' : (order.buyer_proof_data ? 'BUKTI PEMBAYARAN TERKIRIM' : 'MENUNGGU PEMBAYARAN'))));
         let reviewBtn = done ? `<div class="flex flex-col items-end gap-1.5"><span class="text-[10px] text-emerald-300">Transaksi selesai. Punya pengalaman?</span><button type="button" onclick="openReviewForOrder('${escapeReviewText(order.order_id)}')" class="text-xs px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black">⭐ Beri Testimoni</button></div>` : '<span class="text-[10px] text-slate-500">Review aktif setelah Admin menyelesaikan transaksi.</span>'
         if (!isSell && !done && order.status !== 'PAID') reviewBtn = `<div class="flex gap-2 flex-wrap justify-end"><button type="button" onclick="reopenPayment('${escapeReviewText(order.order_id)}')" class="text-xs px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black">💳 ${order.buyer_proof_data ? 'Lihat Pembayaran' : 'Lanjut Pembayaran'}</button></div>`;;
         if (isSell && sellStatus === 'SELL_WAITING_CONFIRMATION') reviewBtn = `<div class="flex gap-2"><button type="button" onclick="agreeSellOrder('${escapeReviewText(order.order_id)}')" class="text-xs px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black">✓ Setujui & Lanjutkan</button><button type="button" onclick="cancelSellOrder('${escapeReviewText(order.order_id)}')" class="text-xs px-3 py-2 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-white font-bold">Batal</button></div>`;
@@ -1489,18 +1653,18 @@
           <div class="min-w-0">
             <div class="flex flex-wrap items-center gap-2"><span class="font-bold text-amber-400 text-sm">${escapeReviewText(order.order_id)}</span><span class="text-[10px] px-2 py-0.5 rounded-md border ${statusClass}">${statusText}</span></div>
             <p class="text-xs text-slate-300 mt-1">${escapeReviewText(order.product)} · ${isSell ? `${getSellDisplayQty(order)} ${getSellUnit(order)}` : `${Number(order.qty)||0}x · Rp ${Number(order.total||0).toLocaleString('id-ID')}`}</p>
-            <p class="text-[10px] text-slate-500 mt-1">${escapeReviewText(order.payment)} · ${escapeReviewText(order.world)}</p>
+            <p class="text-[10px] text-slate-500 mt-1">${escapeReviewText(order.payment)} · ${escapeReviewText(order.world)}</p>${!isSell && !done && !expired && !order.buyer_proof_data && getPaymentRemainingMs(order)!==null ? `<p class="text-[10px] text-amber-300 mt-1 font-bold">⏱️ Batas pembayaran: ${formatCountdown(getPaymentRemainingMs(order))}</p>` : ''}
           </div>
           <div class="shrink-0">${reviewBtn}</div>
         </div>`;
       };
       const active = valid.filter(({order}) => {
         const isSell = order.order_type === 'SELL' || order.payment === 'SELL';
-        return !(order.status === 'COMPLETED' || (isSell && ['SELL_COMPLETED','SELL_CANCELLED'].includes(order.sell_status)));
+        return !(order.status === 'COMPLETED' || order.status === 'EXPIRED' || (isSell && ['SELL_COMPLETED','SELL_CANCELLED'].includes(order.sell_status)));
       });
       const history = valid.filter(({order}) => {
         const isSell = order.order_type === 'SELL' || order.payment === 'SELL';
-        return order.status === 'COMPLETED' || (isSell && ['SELL_COMPLETED','SELL_CANCELLED'].includes(order.sell_status));
+        return order.status === 'COMPLETED' || order.status === 'EXPIRED' || (isSell && ['SELL_COMPLETED','SELL_CANCELLED'].includes(order.sell_status));
       });
       list.innerHTML = `
         ${active.length ? `<div class="space-y-3">${active.map(renderBuyerOrderCard).join('')}</div>` : '<p class="text-xs text-slate-500 py-3">Tidak ada pesanan aktif saat ini.</p>'}
@@ -1654,6 +1818,7 @@
     }
 
     function openSellModal(id) {
+      if (!guardNewTransaction()) return;
       playCyberBeep(900, 'sine', 0.06);
       selectedItem = itemsData.find(i => i.id === id);
       if (!selectedItem) return;
@@ -1704,6 +1869,7 @@
     }
     async function submitSellRequest(e) {
       e.preventDefault();
+      if (!guardNewTransaction()) return;
       if (!selectedItem) return;
       const kind = lockKind(selectedItem);
       const rawQty = String(document.getElementById('sell-qty').value || '').trim().replace(',', '.');
@@ -1954,6 +2120,7 @@
 
     async function sendToWA(e) {
       e.preventDefault();
+      if (!guardNewTransaction()) return;
       playCyberBeep(1100, 'square', 0.1);
       loadCartItems();
       if (!cartItems.length) { showToast('Keranjang masih kosong.', true); return; }
@@ -1986,7 +2153,7 @@
       const orderId=makeOrderId();
       const productSummary=cartItems.map(x=>`${x.qty} ${cartUnit(x.product)} ${x.product}`).join(' + ');
       const totalQty=cartItems.reduce((n,x)=>n+(Number(x.qty)||0),0);
-      const order={order_id:orderId,buyer_name:buyerName,product:productSummary,qty:totalQty,total,grow_id:gameId,world,payment,whatsapp_number:whatsappNumber,status:'WAITING_PAYMENT',created_at:new Date().toISOString(),paid_at:null,completed_at:null,order_type:'BUY',buyer_proof_data:null};
+      const createdAt=new Date(); const paymentDeadline=new Date(createdAt.getTime()+30*60*1000).toISOString(); const order={order_id:orderId,buyer_name:buyerName,product:productSummary,qty:totalQty,total,grow_id:gameId,world,payment,whatsapp_number:whatsappNumber,status:'WAITING_PAYMENT',created_at:createdAt.toISOString(),payment_deadline:paymentDeadline,stock_restored:false,cart_items:cartItems.map(x=>({...x})),paid_at:null,completed_at:null,order_type:'BUY',buyer_proof_data:null};
       const reservedStocks=[];
       const stockBeforeReservation = { ...remoteStockMap };
       try {
@@ -2075,6 +2242,7 @@
       document.getElementById('payment-method').textContent = order.payment || '-';
       renderPaymentOrderItems(order);
       document.getElementById('payment-details').innerHTML = paymentDetailHtml(order.payment);
+      const countdown=document.getElementById('payment-countdown'); const remaining=getPaymentRemainingMs(order); if(countdown) countdown.textContent=remaining===null ? '' : `⏱️ Selesaikan pembayaran dalam ${formatCountdown(Math.max(0,remaining))}`;
       document.getElementById('buyer-payment-proof').value = '';
       document.getElementById('buyer-proof-status').textContent = order.buyer_proof_data ? '✅ Bukti pembayaran sudah diupload.' : '';
       document.getElementById('payment-modal').classList.remove('hidden');
@@ -2082,6 +2250,7 @@
     async function closePaymentModal() { activePaymentOrderId = null; document.getElementById('payment-modal').classList.add('hidden'); await loadBuyerOrders(); }
     async function uploadBuyerPaymentProof() {
       const id=activePaymentOrderId, input=document.getElementById('buyer-payment-proof'), file=input?.files?.[0];
+      const currentOrder=await getOrderById(id); if(currentOrder && currentOrder.status==='EXPIRED'){showToast('Waktu pembayaran order sudah habis.',true);return;} if(currentOrder && getPaymentRemainingMs(currentOrder)!==null && getPaymentRemainingMs(currentOrder)<=0){await expireOldBuyOrders();showToast('Waktu pembayaran order sudah habis.',true);return;}
       if(!id||!file){showToast('Pilih screenshot bukti pembayaran terlebih dahulu.',true);return;}
       if(file.size>5*1024*1024){showToast('Screenshot maksimal 5 MB.',true);input.value='';return;}
       const reader=new FileReader(); reader.onload=async()=>{try{const img=new Image();img.onload=async()=>{const c=document.createElement('canvas'),max=1400,scale=Math.min(1,max/Math.max(img.width,img.height));c.width=Math.round(img.width*scale);c.height=Math.round(img.height*scale);c.getContext('2d').drawImage(img,0,0,c.width,c.height);const data=c.toDataURL('image/jpeg',0.78);await supabaseRequest(`orders?order_id=eq.${encodeURIComponent(id)}`,{method:'PATCH',headers:{'Prefer':'return=minimal'},body:JSON.stringify({buyer_proof_data:data})});const local=getOrders(),i=local.findIndex(x=>x.order_id===id);if(i>=0){local[i].buyer_proof_data=data;saveOrders(local);}document.getElementById('buyer-proof-status').textContent='✅ Bukti pembayaran berhasil diupload.';input.value='';await loadBuyerOrders();if(isAdmin)await loadAdminOrders();showToast('Bukti pembayaran berhasil diupload.');};img.src=reader.result;}catch(err){showToast('Gagal mengunggah bukti pembayaran.',true);console.error(err);}};reader.readAsDataURL(file);
@@ -2488,10 +2657,12 @@ Terima kasih 🙏`;
       document.getElementById("form-btn").innerText = "Tambah Produk";
     }
     loadCartItems();
+    loadStoreStatus();
     loadItems();
     loadRemoteStock();
     loadReviews();
     loadBuyerOrders();
+    startPaymentExpiryWatcher();
   </script>
 
   <!-- FITUR 1 & FITUR 2: CYBER-AUDIO REACTIVE VISUALIZER, LO-FI CHILL BGM & OVERDRIVE PANIC SIREN ENGINE -->
