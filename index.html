@@ -4,7 +4,10 @@
   <link rel="preconnect" href="https://taastore-backend.vercel.app" crossorigin>
   <link rel="dns-prefetch" href="//taastore-backend.vercel.app">
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <title>TAASTORE - Store Resmi Gems & Items</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1030,6 +1033,30 @@
     // A visitor ID is kept locally only to prevent the same browser/device
     // from adding the same product more than once. Counts are global.
     const VISITOR_KEY = "taastore_visitor_id_v1";
+    // V7.15: customer identity is local to this browser/device.
+    // It is intentionally not a fingerprint and is never shared with Admin.
+    // V7.15.1: Critical checkout images are embedded in the HTML so checkout
+    // does not depend on a separate asset request. The same files remain in
+    // /assets for Git/Vercel backup and for any non-critical references.
+    const CUSTOMER_SESSION_KEY = "taastore_customer_session_id_v1";
+    function getCustomerSessionId() {
+      try {
+        let id = localStorage.getItem(CUSTOMER_SESSION_KEY);
+        if (!id) {
+          if (window.crypto && typeof window.crypto.randomUUID === 'function') id = window.crypto.randomUUID();
+          else {
+            const bytes = new Uint8Array(16);
+            if (window.crypto && typeof window.crypto.getRandomValues === 'function') window.crypto.getRandomValues(bytes);
+            else for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+            id = Array.from(bytes, b => b.toString(16).padStart(2,'0')).join('');
+          }
+          localStorage.setItem(CUSTOMER_SESSION_KEY, id);
+        }
+        return id;
+      } catch (_) {
+        return 'session-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      }
+    }
     function getVisitorId() {
       let id = localStorage.getItem(VISITOR_KEY);
       if (!id) {
@@ -1589,14 +1616,19 @@
     }
 
     function getBuyerOrderIds() {
-      const ids = [];
-      const last = (localStorage.getItem("taastore_last_order_id") || "").toUpperCase();
-      if (last) ids.push(last);
-      getOrders().forEach(o => {
-        const id = String(o.order_id || "").toUpperCase();
-        if (id && !ids.includes(id)) ids.push(id);
-      });
-      return ids;
+      // IMPORTANT: never scan the complete local order cache here.
+      // Pesanan Saya is an explicit per-browser/device list only.
+      try {
+        const raw = localStorage.getItem('taastore_buyer_order_ids');
+        const parsed = raw ? JSON.parse(raw) : [];
+        const ids = Array.isArray(parsed) ? parsed : [];
+        const last = String(localStorage.getItem('taastore_last_order_id') || '').toUpperCase();
+        if (last && !ids.some(x => String(x).toUpperCase() === last)) ids.unshift(last);
+        return ids.map(x => String(x || '').toUpperCase()).filter(Boolean).slice(0,50);
+      } catch (_) {
+        const last = String(localStorage.getItem('taastore_last_order_id') || '').toUpperCase();
+        return last ? [last] : [];
+      }
     }
 
     function formatCountdown(ms){
@@ -1881,8 +1913,16 @@
       selectedItem = null;
     }
     function rememberBuyerOrderId(orderId) {
-      const ids = getBuyerOrderIds();
-      if (!ids.includes(orderId)) { ids.unshift(orderId); localStorage.setItem('taastore_buyer_order_ids', JSON.stringify(ids.slice(0,50))); }
+      const id = String(orderId || '').toUpperCase();
+      if (!id) return;
+      try {
+        const raw = localStorage.getItem('taastore_buyer_order_ids');
+        const parsed = raw ? JSON.parse(raw) : [];
+        const ids = (Array.isArray(parsed) ? parsed : []).map(x => String(x || '').toUpperCase()).filter(Boolean);
+        const next = [id, ...ids.filter(x => x !== id)].slice(0,50);
+        localStorage.setItem('taastore_buyer_order_ids', JSON.stringify(next));
+        localStorage.setItem('taastore_last_order_id', id);
+      } catch (_) {}
     }
     function getSellDisplayQty(order) {
       const kind = lockKind({ name: order?.product || '' });
@@ -1919,13 +1959,13 @@
       const note = document.getElementById('sell-note').value.trim();
       const orderId = makeOrderId();
       // World Drop is intentionally controlled by Admin and is not entered by the seller.
-      const order = { order_id: orderId, buyer_name: sellerName, product: selectedItem.name, qty: equivalentDL, sell_qty_input: qty, total: 0, grow_id: gameId, world: '', payment: 'SELL', whatsapp_number: whatsappNumber, status: 'WAITING_PAYMENT', created_at: new Date().toISOString(), paid_at: null, completed_at: null, order_type: 'SELL', sell_status: 'SELL_WAITING_CONFIRMATION', seller_note: note, sell_proof_data: null };
+      const order = { order_id: orderId, customer_session_id: getCustomerSessionId(), buyer_name: sellerName, product: selectedItem.name, qty: equivalentDL, sell_qty_input: qty, total: 0, grow_id: gameId, world: '', payment: 'SELL', whatsapp_number: whatsappNumber, status: 'WAITING_PAYMENT', created_at: new Date().toISOString(), paid_at: null, completed_at: null, order_type: 'SELL', sell_status: 'SELL_WAITING_CONFIRMATION', seller_note: note, sell_proof_data: null };
       try {
         await supabaseRequest('orders', { method:'POST', headers:{'Prefer':'return=minimal'}, body:JSON.stringify(order) });
       } catch(err) {
         const detail = [err.message, err.code ? `code: ${err.code}` : '', err.hint ? `hint: ${err.hint}` : ''].filter(Boolean).join(' | '); showToast(`Pengajuan gagal disimpan: ${detail || 'cek Supabase'}`, true); console.error('TAASTORE SELL insert error:', err); return;
       }
-      const orders=getOrders(); orders.unshift(order); saveOrders(orders); rememberBuyerOrderId(orderId); localStorage.setItem('taastore_last_order_id', orderId);
+      const orders=getOrders(); orders.unshift({...order,customer_session_id:getCustomerSessionId()}); saveOrders(orders); rememberBuyerOrderId(orderId);
       const text = `💰 *FORM PENJUALAN TAASTORE*\n━━━━━━━━━━━━━━━━━━━━\n• *Order ID* : ${orderId}\n• *Nama Seller* : ${sellerName}\n• *Produk* : ${selectedItem.name}\n• *Jumlah* : ${qty} ${kind || 'BGL/DL'} (${equivalentDL} DL)\n• *GrowID / ID Game* : ${gameId}\n• *Catatan* : ${note || '-'}\n━━━━━━━━━━━━━━━━━━━━\nMohon info *Rate Take* terbaru dan detail proses penjualan untuk order ini.\n\nTerima kasih! 🙏`;
       window.open(`https://wa.me/6282123602358?text=${encodeURIComponent(text)}`,'_blank');
       closeSellModal(); showToast(`Pengajuan ${orderId} dibuat. Cek pesanan untuk Setujui atau Batalkan.`); await loadBuyerOrders(); if(isAdmin) await loadAdminOrders();
@@ -2190,7 +2230,7 @@
       const orderId=makeOrderId();
       const productSummary=cartItems.map(x=>`${x.qty} ${cartUnit(x.product)} ${x.product}`).join(' + ');
       const totalQty=cartItems.reduce((n,x)=>n+(Number(x.qty)||0),0);
-      const createdAt=new Date(); const paymentDeadline=new Date(createdAt.getTime()+30*60*1000).toISOString(); const order={order_id:orderId,buyer_name:buyerName,product:productSummary,qty:totalQty,total,grow_id:gameId,world,payment,whatsapp_number:whatsappNumber,status:'WAITING_PAYMENT',created_at:createdAt.toISOString(),payment_deadline:paymentDeadline,stock_restored:false,cart_items:cartItems.map(x=>({...x})),paid_at:null,completed_at:null,order_type:'BUY',buyer_proof_data:null};
+      const createdAt=new Date(); const paymentDeadline=new Date(createdAt.getTime()+30*60*1000).toISOString(); const order={order_id:orderId,customer_session_id:getCustomerSessionId(),buyer_name:buyerName,product:productSummary,qty:totalQty,total,grow_id:gameId,world,payment,whatsapp_number:whatsappNumber,status:'WAITING_PAYMENT',created_at:createdAt.toISOString(),payment_deadline:paymentDeadline,stock_restored:false,cart_items:cartItems.map(x=>({...x})),paid_at:null,completed_at:null,order_type:'BUY',buyer_proof_data:null};
       const reservedStocks=[];
       const stockBeforeReservation = { ...remoteStockMap };
       try {
@@ -2219,8 +2259,8 @@
         filterProducts();
         return;
       }
-      const orders=getOrders(); orders.unshift({...order,cart_items:cartItems.map(x=>({...x}))}); saveOrders(orders);
-      localStorage.setItem('taastore_last_order_id',orderId);
+      const orders=getOrders(); orders.unshift({...order,customer_session_id:getCustomerSessionId(),cart_items:cartItems.map(x=>({...x}))}); saveOrders(orders);
+      rememberBuyerOrderId(orderId);
       const paymentOrder={...order,cart_items:cartItems.map(x=>({...x}))};
       cartItems=[]; saveCartItems(); closeCartModal(); showOrderSuccessModal(paymentOrder);
       // Do not block the payment prompt behind remote order reloads.
@@ -2271,15 +2311,24 @@
       }
       document.getElementById('order-success-modal')?.classList.remove('hidden');
     }
+    let continuingToPayment = false;
     function continueToPayment(){
+      if (continuingToPayment) return;
       const order=pendingPaymentOrder;
+      if (!order) return;
+      continuingToPayment=true;
+      const btn = document.querySelector('#order-success-modal button[onclick="continueToPayment()"]');
+      if (btn) { btn.disabled=true; btn.setAttribute('aria-busy','true'); btn.textContent='Membuka pembayaran…'; }
       pendingPaymentOrder=null;
       document.getElementById('order-success-modal')?.classList.add('hidden');
-      if(order) {
-        openPaymentModal(order);
-        // Put the upload control in focus after the modal is painted, without requiring another click.
-        requestAnimationFrame(() => document.getElementById('buyer-payment-proof')?.focus({preventScroll:true}));
+      // V7.15.1: open the payment UI immediately on the first pointer/click event.
+      // Do not wait for a network refresh, image request, or focus operation.
+      try { openPaymentModal(order); } catch (err) {
+        console.error('TAASTORE payment modal error:', err);
+        showToast('Gagal membuka pembayaran. Coba sekali lagi.', true);
       }
+      if (btn) { btn.disabled=false; btn.removeAttribute('aria-busy'); btn.textContent='Lanjut Pembayaran'; }
+      continuingToPayment=false;
     }
     function renderPaymentOrderItems(order) {
       const box=document.getElementById('payment-order-items');
