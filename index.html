@@ -445,7 +445,9 @@
             <option value="limited">Limited</option>
             <option value="empty">Out of Stock</option>
           </select>
-          <input type="text" id="item-stock-qty" inputmode="decimal" placeholder="Stok BGL (1 BGL = 100 DL)" class="bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-sm focus:outline-none focus:border-amber-400">
+          <div id="item-stock-wrap">
+            <input type="text" id="item-stock-qty" inputmode="decimal" placeholder="Stok BGL (1 BGL = 100 DL)" class="bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-sm focus:outline-none focus:border-amber-400 w-full">
+          </div>
           
           <div class="flex gap-2 col-span-1 md:col-span-3">
             <button type="submit" id="form-btn" class="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold p-2.5 rounded-xl text-sm shadow-lg shadow-amber-500/20">Tambah Produk</button>
@@ -569,7 +571,7 @@
             <div>
               <label class="text-xs text-slate-400 mb-1 block">Nomor WhatsApp</label>
               <input type="tel" id="buyer-wa" inputmode="tel" placeholder="Contoh: 081234567890" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm focus:outline-none focus:border-amber-400">
-              <p class="text-[10px] text-slate-500 mt-1">Pastikan nomor WhatsApp aktif untuk konfirmasi pesanan.</p>
+              <p class="text-[10px] text-slate-500 mt-1">Nomor aktif untuk konfirmasi pesanan.</p>
             </div>
             <div class="grid grid-cols-2 gap-3">
               <div>
@@ -581,7 +583,7 @@
                 <input type="text" id="buyer-world" placeholder="Contoh: TAASTORE" required class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm focus:outline-none focus:border-amber-400">
               </div>
             </div>
-            <div class="text-[10px] leading-relaxed text-amber-300/90 bg-amber-500/5 border border-amber-500/20 rounded-xl px-3 py-2">⚠️ Pastikan GrowID dan World Name sudah benar. Jika data yang diisi salah, Admin tidak bertanggung jawab atas kesalahan transaksi.</div>
+            <div class="text-[10px] leading-relaxed text-amber-300/90 bg-amber-500/5 border border-amber-500/20 rounded-xl px-3 py-2">⚠️ Pastikan GrowID & World Name benar.</div>
             <div>
               <label class="text-xs text-slate-400 mb-1 block">Metode Pembayaran</label>
               <select id="buyer-payment" class="w-full bg-slate-950/80 border border-slate-800 p-2.5 rounded-xl text-white text-sm focus:outline-none focus:border-amber-400">
@@ -1072,9 +1074,9 @@
       if (value === null || value === undefined || value === "") return "";
       const digits = String(value).replace(/\D/g, "");
       if (!digits) return "";
-      // Public SELL/TAKE display: always reveal only the leading digit.
-      // Examples: 40.000 -> Rp 4**.***, 45.500 -> Rp 4**.***, 400.000 -> Rp 4**.***.
-      return `Rp ${digits.charAt(0)}**.***`;
+      // Public SELL/TAKE display: reveal only the first digit.
+      // Examples: 40.000 -> Rp 4*.***, 45.500 -> Rp 4*.***, 400.000 -> Rp 4*.***.
+      return `Rp ${digits[0]}*.***`;
     }
 
     function getTakeRate(item) {
@@ -1345,6 +1347,8 @@
       if (!Array.isArray(list)) return list;
       return list.map(item => {
         const key = String(item?.id ?? '');
+        // JUAL has its own OPEN/CLOSED status. Never apply BUY stock cache/remote stock to it.
+        if (isJualItem(item)) return item;
         if (key && Object.prototype.hasOwnProperty.call(remoteStockMap, key)) {
           const q = Math.max(0, Math.floor(Number(remoteStockMap[key]) || 0));
           return { ...item, stock_quantity: q, stock_status: q === 0 ? 'empty' : q <= 3 ? 'limited' : 'ready' };
@@ -1484,7 +1488,7 @@
               ${typeBadge}
             </div>
             <div class="text-amber-400 font-black text-xl mb-2">
-              ${isJualItem(item) ? (maskTakeRate(getTakeRate(item)) || 'Rp **.***') : `Rp ${(item.price || 0).toLocaleString('id-ID')}`}
+              ${isJualItem(item) ? (maskTakeRate(getTakeRate(item)) || 'Rp 4*.***') : `Rp ${(item.price || 0).toLocaleString('id-ID')}`}
             </div>
             ${isJualItem(item) ? `
               <div class="text-slate-500 text-xs mb-4">Rate Take • Hubungi Admin untuk rate lengkap</div>
@@ -1505,7 +1509,7 @@
               </button>
             ` : `
               <button type="button" onclick="addToCart(${item.id},1)" class="w-full inline-flex items-center justify-center gap-2 text-center bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-lg shadow-amber-500/10 font-bold py-2.5 px-4 rounded-xl transition duration-200">
-                <img src="${localItemImage}" alt="" class="w-5 h-5 object-contain [image-rendering:pixelated]" aria-hidden="true">Tambah ke Pesanan
+                <img src="${localItemImage}" alt="" class="w-5 h-5 object-contain [image-rendering:pixelated]" aria-hidden="true">Pesan Sekarang
               </button>
             `))}
             ${isAdmin ? `
@@ -1921,7 +1925,7 @@
       selectedItem = itemsData.find(i => i.id === id);
       if (!selectedItem) return;
       document.getElementById('sell-item-name').innerText = selectedItem.name;
-      document.getElementById('sell-rate-masked').innerText = maskTakeRate(getTakeRate(selectedItem)) || 'Rp **.***';
+      document.getElementById('sell-rate-masked').innerText = maskTakeRate(getTakeRate(selectedItem)) || 'Rp 4*.***';
       const qtyInput = document.getElementById('sell-qty');
       const qtyNote = document.getElementById('sell-qty-note');
       const kind = lockKind(selectedItem);
@@ -1989,13 +1993,19 @@
       const note = document.getElementById('sell-note').value.trim();
       const orderId = makeOrderId();
       // World Drop is intentionally controlled by Admin and is not entered by the seller.
-      const order = { order_id: orderId, customer_session_id: getCustomerSessionId(), buyer_name: sellerName, product: selectedItem.name, qty: equivalentDL, sell_qty_input: qty, total: 0, grow_id: gameId, world: '', payment: 'SELL', whatsapp_number: whatsappNumber, status: 'WAITING_PAYMENT', created_at: new Date().toISOString(), paid_at: null, completed_at: null, order_type: 'SELL', sell_status: 'SELL_WAITING_CONFIRMATION', seller_note: note, sell_proof_data: null };
+      const customerSessionId = getCustomerSessionId();
+      // customer_session_id is intentionally local-only. The current Supabase `orders`
+      // table does not require that column, while buyer isolation is maintained by the
+      // explicit order-ID list stored on this browser/device.
+      const order = { order_id: orderId, buyer_name: sellerName, product: selectedItem.name, qty: equivalentDL, sell_qty_input: qty, total: 0, grow_id: gameId, world: '', payment: 'SELL', whatsapp_number: whatsappNumber, status: 'WAITING_PAYMENT', created_at: new Date().toISOString(), paid_at: null, completed_at: null, order_type: 'SELL', sell_status: 'SELL_WAITING_CONFIRMATION', seller_note: note, sell_proof_data: null };
       try {
         await supabaseRequest('orders', { method:'POST', headers:{'Prefer':'return=minimal'}, body:JSON.stringify(order) });
       } catch(err) {
-        const detail = [err.message, err.code ? `code: ${err.code}` : '', err.hint ? `hint: ${err.hint}` : ''].filter(Boolean).join(' | '); showToast(`Pengajuan gagal disimpan: ${detail || 'cek Supabase'}`, true); console.error('TAASTORE SELL insert error:', err); return;
+        console.error('TAASTORE SELL insert error:', err);
+        showToast('❌ Pengajuan gagal dibuat. Coba lagi atau hubungi Admin.', true);
+        return;
       }
-      const orders=getOrders(); orders.unshift({...order,customer_session_id:getCustomerSessionId()}); saveOrders(orders); rememberBuyerOrderId(orderId);
+      const orders=getOrders(); orders.unshift({...order,customer_session_id:customerSessionId}); saveOrders(orders); rememberBuyerOrderId(orderId);
       const text = `💰 *FORM PENJUALAN TAASTORE*\n━━━━━━━━━━━━━━━━━━━━\n• *Order ID* : ${orderId}\n• *Nama Seller* : ${sellerName}\n• *Produk* : ${selectedItem.name}\n• *Jumlah* : ${qty} ${kind || 'BGL/DL'} (${equivalentDL} DL)\n• *GrowID / ID Game* : ${gameId}\n• *Catatan* : ${note || '-'}\n━━━━━━━━━━━━━━━━━━━━\nMohon info *Rate Take* terbaru dan detail proses penjualan untuk order ini.\n\nTerima kasih! 🙏`;
       window.open(`https://wa.me/6282123602358?text=${encodeURIComponent(text)}`,'_blank');
       closeSellModal(); showToast(`Pengajuan ${orderId} dibuat. Cek pesanan untuk Setujui atau Batalkan.`); await loadBuyerOrders(); if(isAdmin) await loadAdminOrders();
@@ -2077,7 +2087,10 @@
       else cartItems.push({product_id:item.id, product:item.name, unit_price:Number(item.price)||0, qty:amount, local_image: cartProductIcon(item.name)});
       saveCartItems();
       playCyberBeep(900,'sine',0.06);
-      // Tetap di katalog; pesanan diperbarui tanpa membuka modal.
+      showToast('✓ Produk masuk ke keranjang.');
+      // Setelah memilih produk, arahkan langsung ke Keranjang agar pengguna awam
+      // langsung melihat barang yang baru ditambahkan dan tahu langkah berikutnya.
+      openCartCheckout();
     }
     function changeCartQty(productId, delta) {
       const item=cartItems.find(x=>String(x.product_id)===String(productId)); if(!item)return;
@@ -2258,9 +2271,12 @@
       const total=cartTotal();
       if(total<10000){showToast('Minimum order BUY adalah Rp 10.000.',true);return;}
       const orderId=makeOrderId();
+      const customerSessionId = getCustomerSessionId();
       const productSummary=cartItems.map(x=>`${x.qty} ${cartUnit(x.product)} ${x.product}`).join(' + ');
       const totalQty=cartItems.reduce((n,x)=>n+(Number(x.qty)||0),0);
-      const createdAt=new Date(); const paymentDeadline=new Date(createdAt.getTime()+30*60*1000).toISOString(); const order={order_id:orderId,customer_session_id:getCustomerSessionId(),buyer_name:buyerName,product:productSummary,qty:totalQty,total,grow_id:gameId,world,payment,whatsapp_number:whatsappNumber,status:'WAITING_PAYMENT',created_at:createdAt.toISOString(),payment_deadline:paymentDeadline,stock_restored:false,cart_items:cartItems.map(x=>({...x})),paid_at:null,completed_at:null,order_type:'BUY',buyer_proof_data:null};
+      const createdAt=new Date(); const paymentDeadline=new Date(createdAt.getTime()+30*60*1000).toISOString();
+      // customer_session_id stays local-only so the INSERT matches the existing `orders` table.
+      const order={order_id:orderId,buyer_name:buyerName,product:productSummary,qty:totalQty,total,grow_id:gameId,world,payment,whatsapp_number:whatsappNumber,status:'WAITING_PAYMENT',created_at:createdAt.toISOString(),payment_deadline:paymentDeadline,stock_restored:false,cart_items:cartItems.map(x=>({...x})),paid_at:null,completed_at:null,order_type:'BUY',buyer_proof_data:null};
       const reservedStocks=[];
       const stockBeforeReservation = { ...remoteStockMap };
       try {
@@ -2283,13 +2299,12 @@
           if (before !== undefined) { try { await saveRemoteStock(id, before); } catch (_) {} }
         }
         console.error('TAASTORE order/stock error:',err);
-        const detail=[err.message,err.code?`code: ${err.code}`:'',err.hint?`hint: ${err.hint}`:''].filter(Boolean).join(' | ');
-        showToast(`Order gagal disimpan: ${detail||'cek koneksi Supabase'}`,true);
+        showToast('❌ Pesanan gagal dibuat. Coba lagi atau hubungi Admin.',true);
         await loadRemoteStock();
         filterProducts();
         return;
       }
-      const orders=getOrders(); orders.unshift({...order,customer_session_id:getCustomerSessionId(),cart_items:cartItems.map(x=>({...x}))}); saveOrders(orders);
+      const orders=getOrders(); orders.unshift({...order,customer_session_id:customerSessionId,cart_items:cartItems.map(x=>({...x}))}); saveOrders(orders);
       rememberBuyerOrderId(orderId);
       const paymentOrder={...order,cart_items:cartItems.map(x=>({...x}))};
       cartItems=[]; saveCartItems(); closeCartModal(); showOrderSuccessModal(paymentOrder);
@@ -2708,8 +2723,12 @@ Terima kasih 🙏`;
     function syncItemStatusOptions() {
       const typeEl = document.getElementById("item-type");
       const statusEl = document.getElementById("item-status");
+      const stockWrap = document.getElementById("item-stock-wrap");
+      const stockEl = document.getElementById("item-stock-qty");
       if (!typeEl || !statusEl) return;
       const isJual = String(typeEl.value || '').toLowerCase() === 'jual';
+      if (stockWrap) stockWrap.classList.toggle('hidden', isJual);
+      if (stockEl) stockEl.disabled = isJual;
       const current = String(statusEl.value || '').toLowerCase();
       if (isJual) {
         statusEl.innerHTML = '<option value="ready">OPEN</option><option value="empty">CLOSED</option>';
@@ -2740,13 +2759,16 @@ Terima kasih 🙏`;
       document.getElementById("item-status").value = String(item.stock_status || "ready").toLowerCase() === "empty" ? "empty" : "ready";
 
       const stockEl = document.getElementById("item-stock-qty");
+      const stockWrap = document.getElementById("item-stock-wrap");
       if (isJual) {
-        // JUAL has no BUY inventory quantity. Never load or edit BUY stock here.
+        // JUAL has no BUY inventory quantity. Hide the stock field completely.
         stockEl.value = "";
         stockEl.disabled = true;
+        if (stockWrap) stockWrap.classList.add('hidden');
         stockEl.title = "Stok BUY tidak digunakan untuk produk JUAL. Status JUAL memakai OPEN/CLOSED.";
         stockEl.placeholder = "JUAL: stok BUY tidak digunakan";
       } else {
+        if (stockWrap) stockWrap.classList.remove('hidden');
         const savedOverride = getStockOverrides()[String(item.id)];
         const isBglBuy = /blue gem lock/i.test(item.name || '');
         const isDlBuy = /diamond lock/i.test(item.name || '');
@@ -2875,7 +2897,9 @@ Terima kasih 🙏`;
       document.getElementById("item-stock-qty").value = "";
       document.getElementById("item-stock-qty").disabled = false;
       document.getElementById("item-stock-qty").title = "";
+      document.getElementById("item-stock-wrap")?.classList.remove('hidden');
       document.getElementById("form-btn").innerText = "Tambah Produk";
+      syncItemStatusOptions();
     }
     loadCartItems();
     loadStoreStatus();
