@@ -418,31 +418,51 @@
           <div class="grid grid-cols-3 gap-2">
             <button type="button" onclick="showAdminSection('catalog')" class="admin-nav-btn text-[11px] font-black px-2.5 py-2 rounded-xl border border-amber-500/30 text-amber-300 bg-amber-500/10">📦 Katalog</button>
             <button type="button" onclick="showAdminSection('orders')" class="admin-nav-btn text-[11px] font-black px-2.5 py-2 rounded-xl border border-slate-700 text-slate-400">🧾 Pesanan</button>
-            <button type="button" onclick="showAdminSection('service')" class="admin-nav-btn text-[11px] font-black px-2.5 py-2 rounded-xl border border-slate-700 text-slate-400">⚙️ Layanan</button>
+            <button type="button" onclick="showAdminSection('settings')" class="admin-nav-btn text-[11px] font-black px-2.5 py-2 rounded-xl border border-slate-700 text-slate-400">⚙️ Pengaturan</button>
           </div>
         </div>
-        <details id="admin-service-section" class="hidden mb-4 rounded-2xl border border-slate-800 bg-slate-950/50 overflow-hidden">
-          <summary class="hidden">Service</summary>
+        <details id="admin-settings-section" class="hidden mb-4 rounded-2xl border border-slate-800 bg-slate-950/50 overflow-hidden">
+          <summary class="hidden">Pengaturan</summary>
           <div class="p-4">
-            <div class="text-xs font-black text-amber-300 mb-3">⚙️ Status Layanan & Announcement</div>
-          <div class="p-4 border-t border-slate-800">
-          <div class="flex flex-col lg:flex-row lg:items-end gap-3">
-            <div class="flex-1">
-              <div class="text-xs font-black text-white mb-1">Status Layanan</div>
-              <div class="text-[10px] text-slate-500 mb-2">Mengatur apakah customer dapat membuat BUY/SELL baru.</div>
-              <select id="store-status-select" onchange="changeStoreStatus(this.value)" class="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-sm focus:outline-none focus:border-amber-400">
-                <option value="OPEN">🟢 OPEN</option>
-                <option value="CLOSED">🔴 CLOSED</option>
-                <option value="UNAVAILABLE">🟡 TEMPORARILY UNAVAILABLE</option>
-                <option value="GAME_MAINTENANCE">🎮 GAME MAINTENANCE</option>
-              </select>
+            <div class="flex items-center justify-between gap-3 mb-4">
+              <div>
+                <div class="text-sm font-black text-amber-300">⚙️ Pengaturan Status Toko</div>
+                <div class="text-[10px] text-slate-500 mt-1">Atur kondisi website dan pengumuman tanpa mengubah kode.</div>
+              </div>
+              <span id="store-status-admin-pill" class="text-[9px] font-black px-2.5 py-1 rounded-full border border-emerald-500/30 text-emerald-300 bg-emerald-500/10">OPEN</span>
             </div>
-            <div class="flex-1">
-              <div class="text-xs font-black text-white mb-1">Announcement</div>
-              <div id="store-announcement-preview" class="text-[10px] leading-relaxed text-slate-400 bg-slate-950 border border-slate-800 rounded-xl p-3 min-h-[72px] whitespace-pre-line"></div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                <div class="text-xs font-black text-white mb-1">Status Website</div>
+                <div class="text-[10px] text-slate-500 mb-3">Status ini mengatur banner dan apakah transaksi baru boleh dibuat.</div>
+                <select id="store-status-select" onchange="changeStoreStatus(this.value)" class="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-sm focus:outline-none focus:border-amber-400">
+                  <option value="OPEN">🟢 OPEN</option>
+                  <option value="CLOSED">🔴 CLOSED</option>
+                  <option value="UNAVAILABLE">🟡 TEMPORARILY UNAVAILABLE</option>
+                  <option value="GAME_MAINTENANCE">🎮 GROWTOPIA MAINTENANCE</option>
+                </select>
+                <div id="store-status-admin-hint" class="text-[10px] text-slate-500 mt-3"></div>
+              </div>
+
+              <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                <div class="text-xs font-black text-white mb-1">Running Text</div>
+                <div class="text-[10px] text-slate-500 mb-3">Preview teks berjalan yang tampil di bagian atas website.</div>
+                <div id="store-running-preview" class="rounded-xl border border-slate-800 bg-slate-900/80 p-3 text-[10px] leading-relaxed text-amber-300 min-h-[72px]"></div>
+              </div>
             </div>
-            <button type="button" onclick="copyStoreAnnouncement()" class="shrink-0 bg-cyan-600/80 hover:bg-cyan-600 text-white font-black text-xs px-4 py-2.5 rounded-xl border border-cyan-500/30">Copy Announcement</button>
-          </div>
+
+            <div class="mt-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+                <div>
+                  <div class="text-xs font-black text-white">📢 Template Pengumuman Channel</div>
+                  <div class="text-[10px] text-slate-500">Template otomatis mengikuti status website.</div>
+                </div>
+                <a href="https://whatsapp.com/channel/0029Vb6t9LsKmCPSxiav7j00" target="_blank" rel="noopener noreferrer" class="text-[10px] font-black text-emerald-300 border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 rounded-xl text-center">Buka Channel TAASTORE</a>
+              </div>
+              <div id="store-announcement-preview" class="text-[10px] leading-relaxed text-slate-400 bg-slate-950 border border-slate-800 rounded-xl p-3 min-h-[100px] whitespace-pre-line"></div>
+              <button type="button" onclick="copyStoreAnnouncement()" class="mt-3 w-full sm:w-auto bg-cyan-600/80 hover:bg-cyan-600 text-white font-black text-xs px-4 py-2.5 rounded-xl border border-cyan-500/30">Copy Template</button>
+            </div>
           </div>
         </details>
         <details id="admin-catalog-section" open class="rounded-2xl border border-slate-800 bg-slate-950/50 overflow-hidden">
@@ -941,6 +961,20 @@
       if(select) select.value=storeStatus;
       updateRunningTicker();
       if(preview) preview.textContent=meta.announcement;
+      const pill=document.getElementById('store-status-admin-pill');
+      const hint=document.getElementById('store-status-admin-hint');
+      const runningPreview=document.getElementById('store-running-preview');
+      if(pill){ pill.textContent=storeStatus==='GAME_MAINTENANCE'?'GROWTOPIA MAINTENANCE':(storeStatus==='UNAVAILABLE'?'UNAVAILABLE':storeStatus); }
+      if(hint){ hint.textContent=meta.message || 'Website aktif dan transaksi baru dapat dibuat.'; }
+      if(runningPreview){
+        const msgs = {
+          OPEN:['🚀 Selamat datang di TAASTORE!','⚡ Rate & stok terbaru tersedia di website TAASTORE.GT.','💬 Butuh bantuan? Hubungi Customer Service resmi TAASTORE via WhatsApp.'],
+          CLOSED:['🔴 BUY & SELL — CLOSED • Layanan transaksi TAASTORE.GT sedang ditutup.','📢 Informasi pembukaan kembali akan diumumkan melalui Channel TAASTORE.','💬 Silakan cek Channel TAASTORE untuk update terbaru.'],
+          UNAVAILABLE:['🟡 TEMPORARILY UNAVAILABLE • BUY & SELL sementara tidak dapat diproses.','📢 Layanan akan kembali tersedia setelah TAASTORE.GT dapat beroperasi seperti biasa.','💬 Silakan cek Channel TAASTORE untuk update terbaru.'],
+          GAME_MAINTENANCE:['🎮 GROWTOPIA MAINTENANCE • Growtopia sedang dalam maintenance.','⏳ BUY & SELL sementara tidak dapat diproses sampai server Growtopia kembali online.','📢 Update layanan akan diinformasikan setelah maintenance selesai.']
+        };
+        runningPreview.innerHTML=(msgs[storeStatus]||msgs.OPEN).map(x=>`<div class="py-1">• ${x}</div>`).join('');
+      }
       if(!banner) return;
       banner.className='mb-6 rounded-2xl border p-4 shadow-xl backdrop-blur-md ' + (meta.className || 'hidden');
       if(storeStatus==='OPEN'){ banner.classList.add('hidden'); }
@@ -2723,16 +2757,22 @@ Terima kasih 🙏`;
     function showAdminSection(section) {
       if (!isAdmin) return;
       const catalog = document.getElementById('admin-catalog-section');
-      const service = document.getElementById('admin-service-section');
+      const settings = document.getElementById('admin-settings-section');
       const orders = document.getElementById('admin-orders-panel');
       const buttons = Array.from(document.querySelectorAll('.admin-nav-btn'));
       const active = 'text-[11px] font-black px-2.5 py-2 rounded-xl border border-amber-500/30 text-amber-300 bg-amber-500/10';
       const inactive = 'text-[11px] font-black px-2.5 py-2 rounded-xl border border-slate-700 text-slate-400';
-      buttons.forEach((btn, i) => { btn.className = (i === ({catalog:0,orders:1,service:2}[section] ?? 0)) ? `admin-nav-btn ${active}` : `admin-nav-btn ${inactive}`; });
+      buttons.forEach((btn, i) => { btn.className = (i === ({catalog:0,orders:1,settings:2}[section] ?? 0)) ? `admin-nav-btn ${active}` : `admin-nav-btn ${inactive}`; });
       if (catalog) catalog.classList.toggle('hidden', section !== 'catalog');
-      if (service) service.classList.toggle('hidden', section !== 'service');
+      if (settings) settings.classList.toggle('hidden', section !== 'settings');
       if (orders) orders.classList.toggle('hidden', section !== 'orders');
       if (section === 'orders') loadAdminOrders();
+      if (section === 'settings') {
+        applyStoreStatusUI();
+        const activeMessages = document.querySelectorAll('[data-running-message]');
+        const preview = document.getElementById('store-running-preview');
+        if (preview) { preview.innerHTML = Array.from(activeMessages).map(el => `<div class="py-1">• ${el.textContent}</div>`).join(''); }
+      }
       if (section === 'catalog') window.scrollTo({top: document.getElementById('admin-panel')?.offsetTop || 0, behavior:'smooth'});
     }
 
@@ -2777,7 +2817,7 @@ Terima kasih 🙏`;
       try { localStorage.removeItem(ADMIN_SESSION_KEY); localStorage.removeItem(ADMIN_SESSION_LEGACY_KEY); } catch (_) {}
       document.getElementById("admin-panel").classList.add("hidden");
       document.getElementById("admin-orders-panel").classList.add("hidden");
-      document.getElementById("admin-service-section")?.classList.add("hidden");
+      document.getElementById("admin-settings-section")?.classList.add("hidden");
       document.getElementById("admin-catalog-section")?.classList.remove("hidden");
       document.getElementById("admin-btn").innerText = "Admin Login";
       document.getElementById("admin-btn").className = "bg-slate-800/80 hover:bg-slate-700 text-xs text-slate-300 px-3 py-2 rounded-lg border border-slate-700/80 transition";
