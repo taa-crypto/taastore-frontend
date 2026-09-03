@@ -411,13 +411,11 @@
         <div class="mb-6 rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
           <div class="flex flex-col lg:flex-row lg:items-end gap-3">
             <div class="flex-1">
-              <div class="text-xs font-black text-white mb-1">Status Layanan</div>
-              <div class="text-[10px] text-slate-500 mb-2">Mengatur apakah customer dapat membuat BUY/SELL baru.</div>
+              <div class="text-xs font-black text-white mb-1">Status JUAL</div>
+              <div class="text-[10px] text-slate-500 mb-2">BUY mengikuti stok otomatis. Status ini hanya mengatur apakah TAASTORE sedang menerima JUAL DL/BGL.</div>
               <select id="store-status-select" onchange="changeStoreStatus(this.value)" class="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-sm focus:outline-none focus:border-amber-400">
-                <option value="OPEN">🟢 OPEN</option>
-                <option value="CLOSED">🔴 CLOSED</option>
-                <option value="UNAVAILABLE">🟡 TEMPORARILY UNAVAILABLE</option>
-                <option value="GAME_MAINTENANCE">🎮 GAME MAINTENANCE</option>
+                <option value="OPEN">🟢 JUAL — OPEN</option>
+                <option value="CLOSED">🔴 JUAL — CLOSED</option>
               </select>
             </div>
             <div class="flex-1">
@@ -850,57 +848,43 @@
     const ITEMS_CACHE_KEY = "taastore_items_cache_v2";
     const ITEMS_CACHE_MAX_AGE = 5 * 60 * 1000;
     let itemsLoadPromise = null;
-    const STORE_STATUS_KEY = 'taastore_store_status_cache';
+    const STORE_STATUS_KEY = 'taastore_jual_status_cache';
     const TAASTORE_CHANNEL_URL = 'https://whatsapp.com/channel/0029Vb6t9LsKmCPSxiav7j00';
+    // Status ini KHUSUS untuk layanan JUAL/TAKE. Status BELI mengikuti stok otomatis.
     let storeStatus = 'OPEN';
     const STORE_STATUS_META = {
-      OPEN: { title:'', message:'', className:'', announcement:'' },
+      OPEN: {
+        title:'', message:'', className:'',
+        announcement:`_💎 TAASTORE.GT_\n\n*🟢 BELI — OPEN*\n*🟢 JUAL — OPEN*\n\nLayanan BELI dan JUAL TAASTORE.GT sedang dibuka.\n\n📊 Rate terbaru akan selalu diperbarui melalui channel ini.\n\nSilakan melakukan transaksi melalui website TAASTORE.GT.\n\n_Thank you for your support. 🙏_\n\nTAASTORE.GT`
+      },
       CLOSED: {
-        title:'🔴 BUY & SELL — CLOSED',
-        message:'Untuk sementara, layanan transaksi TAASTORE.GT sedang ditutup.',
+        title:'🔴 JUAL / JUAL — CLOSED',
+        message:'Untuk sementara TAASTORE.GT tidak menerima penjualan DL/BGL dari seller. BUY tetap menyesuaikan stok yang tersedia.',
         className:'border-rose-500/30 bg-rose-950/30',
-        announcement:`_💎 TAASTORE.GT_\n\n*🔴 BUY & SELL — CLOSED*\n\nUntuk sementara, layanan transaksi TAASTORE.GT sedang ditutup.\n\n📢 Informasi mengenai pembukaan kembali layanan akan kami update melalui channel ini.\n\nMohon cek channel untuk informasi terbaru.\n\n_Thank you for your patience. 🙏_\n\nTAASTORE.GT`
-      },
-      UNAVAILABLE: {
-        title:'🟡 TEMPORARILY UNAVAILABLE',
-        message:'Layanan BUY & SELL sementara tidak dapat diproses. Silakan kembali lagi nanti.',
-        className:'border-amber-500/30 bg-amber-950/20',
-        announcement:`_💎 TAASTORE.GT_\n\n*🟡 TEMPORARILY UNAVAILABLE*\n\nUntuk sementara, layanan *BUY & SELL* TAASTORE.GT tidak dapat diproses karena kendala operasional.\n\nLayanan akan kembali tersedia setelah TAASTORE.GT dapat beroperasi seperti biasa.\n\n📢 Update selanjutnya akan diinformasikan melalui channel ini.\n\n_Mohon maaf atas kendalanya dan terima kasih atas pengertiannya. 🙏_\n\nTAASTORE.GT`
-      },
-      GAME_MAINTENANCE: {
-        title:'🎮 GAME MAINTENANCE',
-        message:'Growtopia sedang dalam maintenance. BUY & SELL sementara tidak dapat diproses.',
-        className:'border-cyan-500/30 bg-cyan-950/20',
-        announcement:`_💎 TAASTORE.GT_\n\n*🎮 GAME MAINTENANCE*\n\nGrowtopia sedang dalam maintenance.\n\nUntuk sementara, layanan *BUY & SELL* TAASTORE.GT tidak dapat diproses sampai server Growtopia kembali online.\n\n📢 Kami akan menginformasikan kembali setelah layanan dapat berjalan seperti biasa.\n\n_Thank you for your patience. 🙏_\n\nTAASTORE.GT`
+        announcement:`_💎 TAASTORE.GT_\n\n*🟢 BELI — OPEN*\n*🔴 JUAL — CLOSED*\n\nUntuk sementara TAASTORE.GT tidak menerima penjualan DL/BGL dari seller.\n\n🛒 BELI / BELI tetap dapat dilakukan selama stok tersedia.\n\n📢 Informasi pembukaan kembali JUAL akan kami update melalui channel ini.\n\n_Thank you for your patience. 🙏_\n\nTAASTORE.GT`
       }
     };
-    STORE_STATUS_META.OPEN.announcement = `_💎 TAASTORE.GT_\n\n*🟢 BUY & SELL — OPEN*\n\nLayanan transaksi TAASTORE.GT telah kembali dibuka.\n\n📊 Rate terbaru akan selalu diperbarui melalui channel ini.\n\nSilakan melakukan transaksi melalui website TAASTORE.GT.\n\n_Thank you for your support. 🙏_\n\nTAASTORE.GT`;
+    function isBuyOpenByStock(){
+      try {
+        const dl = typeof getUnifiedLockStockDL === 'function' ? getUnifiedLockStockDL() : null;
+        if(dl !== null && Number.isFinite(Number(dl))) return Number(dl) > 0;
+        return Array.isArray(itemsData) && itemsData.some(i => !isJualItem(i) && getOrderableStock(i) > 0);
+      } catch(_) { return true; }
+    }
     function updateRunningTicker(){
       const messages = document.querySelectorAll('[data-running-message]');
       if(!messages.length) return;
-      const statusMessages = {
-        OPEN: [
-          '🚀 Selamat datang di TAASTORE! Tempat transaksi Gems & Items paling aman, terpercaya, dan proses kilat 24/7!',
-          '⚡ Rate & stok terbaru tersedia di website TAASTORE.GT.',
-          '💬 Butuh bantuan? Hubungi Customer Service resmi TAASTORE via WhatsApp.'
-        ],
-        CLOSED: [
-          '🔴 BUY & SELL — CLOSED • Layanan transaksi TAASTORE.GT sedang ditutup.',
-          '📢 Informasi pembukaan kembali akan diumumkan melalui Channel TAASTORE.',
-          '💬 Silakan cek Channel TAASTORE untuk update terbaru.'
-        ],
-        UNAVAILABLE: [
-          '🟡 TEMPORARILY UNAVAILABLE • BUY & SELL sementara tidak dapat diproses.',
-          '📢 Layanan akan kembali tersedia setelah TAASTORE.GT dapat beroperasi seperti biasa.',
-          '💬 Silakan cek Channel TAASTORE untuk update terbaru.'
-        ],
-        GAME_MAINTENANCE: [
-          '🎮 GAME MAINTENANCE • Growtopia sedang dalam maintenance.',
-          '⏳ BUY & SELL sementara tidak dapat diproses sampai server Growtopia kembali online.',
-          '📢 Update layanan akan diinformasikan setelah maintenance selesai.'
-        ]
-      };
-      const active = statusMessages[storeStatus] || statusMessages.OPEN;
+      const buyOpen = isBuyOpenByStock();
+      const jualOpen = storeStatus === 'OPEN';
+      const active = jualOpen ? [
+        `${buyOpen ? '🟢' : '🔴'} BELI — ${buyOpen ? 'OPEN' : 'CLOSED'} • Stok menyesuaikan ketersediaan.`,
+        '🟢 JUAL — OPEN • TAASTORE.GT sedang menerima DL/BGL dari seller.',
+        '💬 Rate dan stok terbaru tersedia di website TAASTORE.GT.'
+      ] : [
+        `${buyOpen ? '🟢' : '🔴'} BELI — ${buyOpen ? 'OPEN' : 'CLOSED'} • Stok menyesuaikan ketersediaan.`,
+        '🔴 JUAL — CLOSED • TAASTORE.GT sementara tidak menerima DL/BGL dari seller.',
+        '📢 Cek Channel TAASTORE untuk informasi pembukaan JUAL kembali.'
+      ];
       messages.forEach((el,i)=>{ el.textContent = active[i % active.length]; });
     }
     function getCachedStoreStatus(){ try { const v=localStorage.getItem(STORE_STATUS_KEY); return STORE_STATUS_META[v] ? v : 'OPEN'; } catch(_){ return 'OPEN'; } }
@@ -916,10 +900,10 @@
       updateRunningTicker();
       if(preview) preview.textContent=meta.announcement;
       if(!banner) return;
-      banner.className='mb-6 rounded-2xl border p-4 shadow-xl backdrop-blur-md ' + (meta.className || 'hidden');
-      if(storeStatus==='OPEN'){ banner.classList.add('hidden'); }
-      else {
-        banner.classList.remove('hidden');
+      if(storeStatus==='OPEN'){
+        banner.className='hidden mb-6 rounded-2xl border p-4 shadow-xl backdrop-blur-md';
+      } else {
+        banner.className='mb-6 rounded-2xl border p-4 shadow-xl backdrop-blur-md ' + meta.className;
         if(title) title.textContent=meta.title;
         if(message) message.textContent=meta.message;
         if(channel){ channel.href=TAASTORE_CHANNEL_URL; channel.classList.remove('hidden'); }
@@ -936,7 +920,7 @@
           localStorage.setItem(STORE_STATUS_KEY,storeStatus);
           applyStoreStatusUI();
         }
-      } catch(err){ console.warn('TAASTORE store status load failed:',err); }
+      } catch(err){ console.warn('TAASTORE jual status load failed:',err); }
     }
     async function changeStoreStatus(next){
       if(!isAdmin) return;
@@ -946,11 +930,11 @@
       applyStoreStatusUI();
       try {
         await supabaseRequest('store_settings?on_conflict=id',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({id:1,status:next,updated_at:new Date().toISOString()})});
-        showToast(`Status layanan diubah ke ${next}.`);
-      } catch(err){ showToast(`Status tersimpan lokal, tetapi gagal disimpan ke server: ${err.message||'cek Supabase'}`,true); console.error(err); }
+        showToast(`Status JUAL diubah ke ${next === 'OPEN' ? 'OPEN' : 'CLOSED'}.`);
+      } catch(err){ showToast(`Status JUAL tersimpan lokal, tetapi gagal disimpan ke server: ${err.message||'cek Supabase'}`,true); console.error(err); }
     }
-    function isStoreOpen(){ return storeStatus==='OPEN'; }
-    function guardNewTransaction(){ if(isStoreOpen()) return true; const meta=STORE_STATUS_META[storeStatus]||STORE_STATUS_META.CLOSED; showToast(meta.message || 'Layanan sedang tidak tersedia.',true); return false; }
+    function isJualOpen(){ return storeStatus==='OPEN'; }
+    function guardJualTransaction(){ if(isJualOpen()) return true; const meta=STORE_STATUS_META[storeStatus]||STORE_STATUS_META.CLOSED; showToast(meta.message || 'Layanan JUAL sedang ditutup.',true); return false; }
     async function copyStoreAnnouncement(){
       const text=(STORE_STATUS_META[storeStatus]||STORE_STATUS_META.OPEN).announcement;
       try { await navigator.clipboard.writeText(text); showToast('Announcement berhasil disalin.'); }
@@ -1457,22 +1441,18 @@
           </div>
           <div>
             ${isJualItem(item) ? `
-              ${isStoreOpen() ? `<button type="button" onclick="openSellModal(${item.id})" class="w-full inline-flex items-center justify-center gap-2 text-center bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-lg shadow-amber-500/10 font-bold py-2.5 px-4 rounded-xl transition duration-200">
+              ${isJualOpen() ? `<button type="button" onclick="openSellModal(${item.id})" class="w-full inline-flex items-center justify-center gap-2 text-center bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-lg shadow-amber-500/10 font-bold py-2.5 px-4 rounded-xl transition duration-200">
                 <img src="${localItemImage}" alt="" class="w-5 h-5 object-contain [image-rendering:pixelated]" aria-hidden="true">Ajukan Penjualan
               </button>` : `<button type="button" disabled class="w-full inline-flex items-center justify-center gap-2 text-center bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50 font-bold py-2.5 px-4 rounded-xl">Layanan Sementara Ditutup</button>`}
             ` : (isOut ? `
               <button type="button" disabled class="w-full inline-flex items-center justify-center gap-2 text-center bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50 font-bold py-2.5 px-4 rounded-xl">
                 <span class="w-5 h-5 inline-flex items-center justify-center">×</span>Stok Habis
               </button>
-            ` : (!isStoreOpen() ? `
-              <button type="button" disabled class="w-full inline-flex items-center justify-center gap-2 text-center bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50 font-bold py-2.5 px-4 rounded-xl">
-                Layanan Sementara Ditutup
-              </button>
             ` : `
               <button type="button" onclick="addToCart(${item.id},1)" class="w-full inline-flex items-center justify-center gap-2 text-center bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-lg shadow-amber-500/10 font-bold py-2.5 px-4 rounded-xl transition duration-200">
                 <img src="${localItemImage}" alt="" class="w-5 h-5 object-contain [image-rendering:pixelated]" aria-hidden="true">Tambah ke Pesanan
               </button>
-            `))}
+            `)}
             ${isAdmin ? `
               <div class="flex gap-2 mt-3 pt-3 border-t border-slate-800">
                 <button onclick="editItem(${item.id})" class="flex-1 bg-blue-600/80 hover:bg-blue-600 text-xs py-1.5 rounded-lg font-medium border border-blue-500/30">Edit</button>
@@ -1851,7 +1831,7 @@
     }
 
     function openSellModal(id) {
-      if (!guardNewTransaction()) return;
+      if (!guardJualTransaction()) return;
       playCyberBeep(900, 'sine', 0.06);
       selectedItem = itemsData.find(i => i.id === id);
       if (!selectedItem) return;
@@ -1902,7 +1882,7 @@
     }
     async function submitSellRequest(e) {
       e.preventDefault();
-      if (!guardNewTransaction()) return;
+      if (!guardJualTransaction()) return;
       if (!selectedItem) return;
       const kind = lockKind(selectedItem);
       const rawQty = String(document.getElementById('sell-qty').value || '').trim().replace(',', '.');
@@ -1974,7 +1954,6 @@
       const el=document.getElementById('cart-badge'); if(el) el.textContent=String(cartItems.reduce((n,x)=>n+(Number(x.qty)||0),0));
     }
     function addToCart(id, qty=1) {
-      if(!guardNewTransaction()) return;
       const item=itemsData.find(i=>String(i.id)===String(id));
       if(!item || isJualItem(item)) return;
       const stock=getOrderableStock(item);
@@ -2154,7 +2133,6 @@
 
     async function sendToWA(e) {
       e.preventDefault();
-      if (!guardNewTransaction()) return;
       playCyberBeep(1100, 'square', 0.1);
       loadCartItems();
       if (!cartItems.length) { showToast('Keranjang masih kosong.', true); return; }
@@ -2452,7 +2430,7 @@ Terima kasih 🙏`;
       const customerLabel = isSell ? (o.buyer_name || '-') : (o.buyer_name || '-');
       return `<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div class="min-w-0">
-          <div class="flex flex-wrap items-center gap-2"><span class="text-[11px] font-bold text-slate-500 font-mono">${escapeReviewText(o.order_id)}</span><span class="text-[10px] px-2 py-0.5 rounded-md border ${statusClass}">${statusText}</span><span class="text-[10px] px-2 py-0.5 rounded-md border border-cyan-700/40 text-cyan-300 bg-cyan-950/20">${isSell ? '💰 SELL' : '🛒 BUY'}</span></div>
+          <div class="flex flex-wrap items-center gap-2"><span class="text-[11px] font-bold text-slate-500 font-mono">${escapeReviewText(o.order_id)}</span><span class="text-[10px] px-2 py-0.5 rounded-md border ${statusClass}">${statusText}</span><span class="text-[10px] px-2 py-0.5 rounded-md border border-cyan-700/40 text-cyan-300 bg-cyan-950/20">${isSell ? '💎 JUAL' : '🛒 BELI'}</span></div>
           <p class="text-xs text-slate-200 mt-1 font-semibold">${escapeReviewText(o.product)} · ${isSell ? `${getSellDisplayQty(o)} ${getSellUnit(o)}` : `${Number(o.qty)||0}x · Rp ${Number(o.total||0).toLocaleString('id-ID')}`}</p>
           <p class="text-[10px] text-slate-500 mt-1">${escapeReviewText(customerLabel)} · GrowID: ${escapeReviewText(o.grow_id || '-')} · ${wa ? 'WA terhubung' : 'WA belum tersimpan'}</p>
           ${isSell && o.sell_proof_data ? `<button type="button" onclick="openSellProof('${escapeReviewText(o.order_id)}')" class="text-[10px] text-cyan-300 underline mt-1">Lihat Bukti Drop</button>` : ''}
