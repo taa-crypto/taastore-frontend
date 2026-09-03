@@ -1169,9 +1169,6 @@
       const source = map || {};
       return list.map(item => {
         const key = String(item?.id ?? '');
-        // JUAL listings do not use BUY inventory. Their OPEN/CLOSED state
-        // must never be overwritten by product_stock.
-        if (isJualItem(item)) return item;
         if (key && Object.prototype.hasOwnProperty.call(source, key)) {
           const q = Math.max(0, Math.floor(Number(source[key]) || 0));
           return { ...item, stock_quantity: q, stock_status: q === 0 ? 'empty' : q <= 3 ? 'limited' : 'ready' };
@@ -1316,8 +1313,6 @@
       if (!Array.isArray(list)) return list;
       return list.map(item => {
         const key = String(item?.id ?? '');
-        // Never apply BUY stock overrides to JUAL catalog entries.
-        if (isJualItem(item)) return item;
         if (key && Object.prototype.hasOwnProperty.call(remoteStockMap, key)) {
           const q = Math.max(0, Math.floor(Number(remoteStockMap[key]) || 0));
           return { ...item, stock_quantity: q, stock_status: q === 0 ? 'empty' : q <= 3 ? 'limited' : 'ready' };
@@ -2227,7 +2222,11 @@
       const orders=getOrders(); orders.unshift({...order,cart_items:cartItems.map(x=>({...x}))}); saveOrders(orders);
       localStorage.setItem('taastore_last_order_id',orderId);
       const paymentOrder={...order,cart_items:cartItems.map(x=>({...x}))};
-      cartItems=[]; saveCartItems(); closeCartModal(); await loadBuyerOrders(); showOrderSuccessModal(paymentOrder); if(isAdmin) await loadAdminOrders();
+      cartItems=[]; saveCartItems(); closeCartModal(); showOrderSuccessModal(paymentOrder);
+      // Do not block the payment prompt behind remote order reloads.
+      // The success/payment modal should appear on the first click.
+      loadBuyerOrders().catch(err => console.warn('TAASTORE buyer orders refresh failed:', err));
+      if(isAdmin) loadAdminOrders().catch(err => console.warn('TAASTORE admin orders refresh failed:', err));
     }
 
     let activePaymentOrderId = null;
@@ -2237,7 +2236,24 @@
       if (method === 'GOPAY') return `<div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4"><div class="text-xs text-slate-400">💙 GoPay</div><div class="text-xl font-black text-white mt-1">082123602358</div><div class="text-xs text-slate-400 mt-1">A.N. <span class="text-slate-200 font-semibold">ANAS</span></div></div>`;
       return `<div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4"><div class="text-xs text-slate-400">💙 DANA</div><div class="text-xl font-black text-white mt-1">082123602358</div><div class="text-xs text-slate-400 mt-1">A.N. <span class="text-slate-200 font-semibold">ANAS</span></div></div>`;
     }
-    async function reopenPayment(orderId) { const order=await getOrderById(orderId); if(!order){showToast('Order tidak ditemukan.',true);return;} openPaymentModal(order); }
+    async function reopenPayment(orderId) {
+      const wanted=String(orderId||'').toUpperCase();
+      if(!wanted) return;
+      // Open immediately from the device-local order copy; refresh from Supabase in the background.
+      const localOrder=getOrders().find(o=>String(o.order_id||'').toUpperCase()===wanted);
+      if(localOrder){ openPaymentModal(localOrder); }
+      try {
+        const fresh=await getOrderById(wanted);
+        if(!fresh){ if(!localOrder) showToast('Order tidak ditemukan.',true); return; }
+        if(!activePaymentOrderId) openPaymentModal(fresh);
+        else if(String(activePaymentOrderId).toUpperCase()===wanted) {
+          // Refresh visible data without requiring a second click.
+          openPaymentModal(fresh);
+        }
+      } catch(err) {
+        if(!localOrder) showToast('Gagal memuat order. Cek koneksi.',true);
+      }
+    }
     let pendingPaymentOrder = null;
     function showOrderSuccessModal(order) {
       pendingPaymentOrder = order;
@@ -2259,7 +2275,11 @@
       const order=pendingPaymentOrder;
       pendingPaymentOrder=null;
       document.getElementById('order-success-modal')?.classList.add('hidden');
-      if(order) openPaymentModal(order);
+      if(order) {
+        openPaymentModal(order);
+        // Put the upload control in focus after the modal is painted, without requiring another click.
+        requestAnimationFrame(() => document.getElementById('buyer-payment-proof')?.focus({preventScroll:true}));
+      }
     }
     function renderPaymentOrderItems(order) {
       const box=document.getElementById('payment-order-items');
@@ -2617,8 +2637,6 @@ Terima kasih 🙏`;
         statusEl.innerHTML = '<option value="ready">OPEN</option><option value="empty">CLOSED</option>';
         statusEl.value = current === 'empty' ? 'empty' : 'ready';
         statusEl.title = 'Status katalog JUAL: OPEN menerima penjualan, CLOSED tidak menampung DL/BGL.';
-        const stockEl = document.getElementById('item-stock-qty');
-        if (stockEl) { stockEl.value = ''; stockEl.disabled = true; stockEl.title = 'Katalog JUAL tidak menggunakan stok BUY.'; }
       } else {
         statusEl.innerHTML = '<option value="ready">Ready</option><option value="limited">Limited</option><option value="empty">Out of Stock</option>';
         statusEl.value = ['ready','limited','empty'].includes(current) ? current : 'ready';
@@ -2639,28 +2657,16 @@ Terima kasih 🙏`;
         document.getElementById("item-status").value = item.stock_status || "ready";
         syncItemStatusOptions();
         const savedOverride = getStockOverrides()[String(item.id)];
-        const isJual = (item.type || 'beli').toLowerCase() === 'jual';
-        const isBglBuy = !isJual && (item.type || 'beli').toLowerCase() === 'beli' && /blue gem lock/i.test(item.name || '');
-        const isDlBuy = !isJual && (item.type || 'beli').toLowerCase() === 'beli' && /diamond lock/i.test(item.name || '');
+        const isBglBuy = (item.type || 'beli').toLowerCase() === 'beli' && /blue gem lock/i.test(item.name || '');
+        const isDlBuy = (item.type || 'beli').toLowerCase() === 'beli' && /diamond lock/i.test(item.name || '');
         const unified = getUnifiedLockStockDL();
-        const stockInput = document.getElementById("item-stock-qty");
-        if (isJual) {
-          stockInput.value = '';
-          stockInput.disabled = true;
-          stockInput.title = 'Katalog JUAL tidak menggunakan stok BUY.';
-        } else {
-          stockInput.value = isDlBuy ? (unified === null ? '' : (unified/100).toFixed(2).replace(/\.00$/, '')) : (isBglBuy ? (unified === null ? '' : (unified/100).toFixed(2).replace(/\.00$/, '')) : (savedOverride !== undefined ? savedOverride : (getStockQuantity(item) ?? "")));
-          stockInput.disabled = isDlBuy;
-          stockInput.title = isDlBuy ? 'Stok DL mengikuti stok BGL.' : '';
-        }
+        document.getElementById("item-stock-qty").value = isDlBuy ? (unified === null ? '' : (unified/100).toFixed(2).replace(/\.00$/, '')) : (isBglBuy ? (unified === null ? '' : (unified/100).toFixed(2).replace(/\.00$/, '')) : (savedOverride !== undefined ? savedOverride : (getStockQuantity(item) ?? "")));
+        document.getElementById("item-stock-qty").disabled = isDlBuy;
+        document.getElementById("item-stock-qty").title = isDlBuy ? 'Stok DL mengikuti stok BGL.' : '';
         document.getElementById("form-btn").innerText = "Simpan Perubahan";
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
     }
-    function isJualType(type) {
-      return String(type || '').toLowerCase() === 'jual';
-    }
-
     async function saveItem(e) {
       e.preventDefault();
       const id = document.getElementById("item-id").value;
@@ -2675,13 +2681,10 @@ Terima kasih 🙏`;
       const stock_quantity = isBglBuy && enteredBgl !== null ? Math.round(enteredBgl * 100) : (isDlBuy ? null : (enteredBgl === null ? null : Math.floor(enteredBgl)));
       const displayBgl = isBglBuy && enteredBgl !== null ? enteredBgl : (isDlBuy ? (getUnifiedLockStockDL() === null ? null : getUnifiedLockStockDL()/100) : enteredBgl);
       const selectedStatus = String(document.getElementById("item-status").value || 'ready').toLowerCase();
-      const stock_status = isJualType(type)
+      const stock_status = type === 'jual'
         ? (selectedStatus === 'empty' ? 'empty' : 'ready')
         : (stock_quantity === 0 ? 'empty' : stock_quantity !== null && stock_quantity <= 100 ? 'limited' : 'ready');
-      const payload = { name, price, image_url, type, stock_status };
-      // JUAL OPEN/CLOSED is independent from BUY stock and must persist
-      // as stock_status. Do not send stock_quantity for JUAL.
-      if (!isJualType(type)) payload.stock_quantity = stock_quantity;
+      const payload = { name, price, image_url, type, stock_status, stock_quantity };
       if (isDlBuy) delete payload.stock_quantity;
       const headers = { "Content-Type": "application/json", "x-admin-key": adminKey };
       try {
@@ -2695,7 +2698,7 @@ Terima kasih 🙏`;
         try { savedProduct = await response.json(); } catch (_) {}
         const savedId = id || (Array.isArray(savedProduct) ? savedProduct[0]?.id : null) || savedProduct?.id || savedProduct?.item?.id || savedProduct?.data?.id || '';
 
-        if (savedId && !isJualType(type) && (isBglBuy || (!isDlBuy && stock_quantity !== null))) {
+        if (savedId && (isBglBuy || (!isDlBuy && stock_quantity !== null))) {
           setStockOverride(savedId, stock_quantity === null ? 0 : stock_quantity);
           const remoteSaved = isBglBuy
             ? await setUnifiedLockStockDL(stock_quantity)
