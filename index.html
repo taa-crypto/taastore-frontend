@@ -1154,6 +1154,7 @@
       loadGlobalFavorites();
     }
     const STOCK_CACHE_KEY = "taastore_stock_overrides_v1";
+    const JUAL_STATUS_CACHE_KEY = "taastore_jual_status_overrides_v1";
     const STOCK_REMOTE_CACHE_KEY = "taastore_remote_stock_v1";
     let remoteStockMap = {};
     let remoteStockLoaded = false;
@@ -1307,21 +1308,35 @@
         localStorage.setItem(STOCK_CACHE_KEY, JSON.stringify(map));
       } catch (_) {}
     }
+    function getJualStatusOverrides() {
+      try { return JSON.parse(localStorage.getItem(JUAL_STATUS_CACHE_KEY) || "{}"); } catch (_) { return {}; }
+    }
+    function setJualStatusOverride(id, status) {
+      try {
+        const map = getJualStatusOverrides();
+        map[String(id)] = String(status).toLowerCase() === 'empty' ? 'empty' : 'ready';
+        localStorage.setItem(JUAL_STATUS_CACHE_KEY, JSON.stringify(map));
+      } catch (_) {}
+    }
     function clearStockOverrides() { try { localStorage.removeItem(STOCK_CACHE_KEY); } catch (_) {} }
     function applyStockOverrides(list) {
       const overrides = getStockOverrides();
+      const jualStatus = getJualStatusOverrides();
       if (!Array.isArray(list)) return list;
       return list.map(item => {
         const key = String(item?.id ?? '');
+        let next = item;
         if (key && Object.prototype.hasOwnProperty.call(remoteStockMap, key)) {
           const q = Math.max(0, Math.floor(Number(remoteStockMap[key]) || 0));
-          return { ...item, stock_quantity: q, stock_status: q === 0 ? 'empty' : q <= 3 ? 'limited' : 'ready' };
-        }
-        if (key && Object.prototype.hasOwnProperty.call(overrides, key)) {
+          next = { ...next, stock_quantity: q, stock_status: q === 0 ? 'empty' : q <= 3 ? 'limited' : 'ready' };
+        } else if (key && Object.prototype.hasOwnProperty.call(overrides, key)) {
           const q = Math.max(0, Math.floor(Number(overrides[key]) || 0));
-          return { ...item, stock_quantity: q, stock_status: q === 0 ? 'empty' : q <= 3 ? 'limited' : 'ready' };
+          next = { ...next, stock_quantity: q, stock_status: q === 0 ? 'empty' : q <= 100 ? 'limited' : 'ready' };
         }
-        return item;
+        if (String(next?.type || '').toLowerCase() === 'jual' && key && Object.prototype.hasOwnProperty.call(jualStatus, key)) {
+          next = { ...next, stock_status: jualStatus[key] === 'empty' ? 'empty' : 'ready' };
+        }
+        return next;
       });
     }
 
@@ -2629,8 +2644,10 @@ Terima kasih 🙏`;
         document.getElementById("item-image").value = item.image_url || "";
         document.getElementById("item-type").value = (item.type || 'beli').toLowerCase();
         syncItemStatusOptions();
-        document.getElementById("item-status").value = item.stock_status || "ready";
+        const jualStatusOverride = getJualStatusOverrides()[String(item.id)];
+        document.getElementById("item-status").value = ((item.type || '').toLowerCase() === 'jual' && jualStatusOverride) ? jualStatusOverride : (item.stock_status || "ready");
         syncItemStatusOptions();
+        if ((item.type || '').toLowerCase() === 'jual' && jualStatusOverride) document.getElementById("item-status").value = jualStatusOverride;
         const savedOverride = getStockOverrides()[String(item.id)];
         const isBglBuy = (item.type || 'beli').toLowerCase() === 'beli' && /blue gem lock/i.test(item.name || '');
         const isDlBuy = (item.type || 'beli').toLowerCase() === 'beli' && /diamond lock/i.test(item.name || '');
@@ -2672,6 +2689,10 @@ Terima kasih 🙏`;
         let savedProduct = null;
         try { savedProduct = await response.json(); } catch (_) {}
         const savedId = id || (Array.isArray(savedProduct) ? savedProduct[0]?.id : null) || savedProduct?.id || savedProduct?.item?.id || savedProduct?.data?.id || '';
+
+        if (savedId && type === 'jual') {
+          setJualStatusOverride(savedId, stock_status);
+        }
 
         if (savedId && (isBglBuy || (!isDlBuy && stock_quantity !== null))) {
           setStockOverride(savedId, stock_quantity === null ? 0 : stock_quantity);
