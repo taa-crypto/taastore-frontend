@@ -442,7 +442,9 @@
             <option value="limited">Limited</option>
             <option value="empty">Out of Stock</option>
           </select>
-          <input type="text" id="item-stock-qty" inputmode="decimal" placeholder="Stok BGL (1 BGL = 100 DL)" class="bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-sm focus:outline-none focus:border-amber-400">
+          <div id="item-stock-wrap">
+            <input type="text" id="item-stock-qty" inputmode="decimal" placeholder="Stok BGL (1 BGL = 100 DL)" class="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-sm focus:outline-none focus:border-amber-400">
+          </div>
           
           <div class="flex gap-2 col-span-1 md:col-span-3">
             <button type="submit" id="form-btn" class="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold p-2.5 rounded-xl text-sm shadow-lg shadow-amber-500/20">Tambah Produk</button>
@@ -1155,6 +1157,15 @@
     }
     const STOCK_CACHE_KEY = "taastore_stock_overrides_v1";
     const STOCK_REMOTE_CACHE_KEY = "taastore_remote_stock_v1";
+    const JUAL_STATUS_CACHE_KEY = "taastore_jual_status_v1";
+    function getJualStatusCache() { try { return JSON.parse(localStorage.getItem(JUAL_STATUS_CACHE_KEY) || "{}"); } catch (_) { return {}; } }
+    function getSavedJualStatus(id) {
+      const map = getJualStatusCache();
+      return String(map[String(id)] || '').toLowerCase();
+    }
+    function setSavedJualStatus(id, status) {
+      try { const map = getJualStatusCache(); map[String(id)] = status === 'empty' ? 'empty' : 'ready'; localStorage.setItem(JUAL_STATUS_CACHE_KEY, JSON.stringify(map)); } catch (_) {}
+    }
     let remoteStockMap = {};
     let remoteStockLoaded = false;
 
@@ -1313,6 +1324,10 @@
       if (!Array.isArray(list)) return list;
       return list.map(item => {
         const key = String(item?.id ?? '');
+        if (isJualItem(item)) {
+          const cached = key ? getSavedJualStatus(key) : '';
+          return cached ? { ...item, stock_quantity: null, stock_status: cached } : { ...item, stock_quantity: null };
+        }
         if (key && Object.prototype.hasOwnProperty.call(remoteStockMap, key)) {
           const q = Math.max(0, Math.floor(Number(remoteStockMap[key]) || 0));
           return { ...item, stock_quantity: q, stock_status: q === 0 ? 'empty' : q <= 3 ? 'limited' : 'ready' };
@@ -2605,6 +2620,8 @@ Terima kasih 🙏`;
     function syncItemStatusOptions() {
       const typeEl = document.getElementById("item-type");
       const statusEl = document.getElementById("item-status");
+      const stockWrap = document.getElementById("item-stock-wrap");
+      const stockInput = document.getElementById("item-stock-qty");
       if (!typeEl || !statusEl) return;
       const isJual = String(typeEl.value || '').toLowerCase() === 'jual';
       const current = String(statusEl.value || '').toLowerCase();
@@ -2612,37 +2629,54 @@ Terima kasih 🙏`;
         statusEl.innerHTML = '<option value="ready">OPEN</option><option value="empty">CLOSED</option>';
         statusEl.value = current === 'empty' ? 'empty' : 'ready';
         statusEl.title = 'Status katalog JUAL: OPEN menerima penjualan, CLOSED tidak menampung DL/BGL.';
-        const stockInput = document.getElementById('item-stock-qty');
-        if (stockInput) { stockInput.value = ''; stockInput.disabled = true; stockInput.placeholder = 'Stok tidak digunakan untuk JUAL'; }
+        if (stockWrap) stockWrap.classList.add('hidden');
+        if (stockInput) { stockInput.value = ''; stockInput.disabled = true; stockInput.title = 'Katalog JUAL tidak menggunakan stok.'; }
       } else {
         statusEl.innerHTML = '<option value="ready">Ready</option><option value="limited">Limited</option><option value="empty">Out of Stock</option>';
         statusEl.value = ['ready','limited','empty'].includes(current) ? current : 'ready';
         statusEl.title = 'Status BELI mengikuti stok otomatis.';
-        const stockInput = document.getElementById('item-stock-qty');
-        if (stockInput) { stockInput.disabled = false; stockInput.placeholder = 'Stok BGL (1 BGL = 100 DL)'; }
+        if (stockWrap) stockWrap.classList.remove('hidden');
+        if (stockInput) { stockInput.disabled = false; stockInput.placeholder = 'Stok BGL (1 BGL = 100 DL)'; stockInput.title = ''; }
       }
     }
     document.getElementById("item-type")?.addEventListener('change', syncItemStatusOptions);
 
     function editItem(id) {
-      const item = itemsData.find(i => i.id === id);
+      const item = itemsData.find(i => String(i.id) === String(id));
       if (item) {
         document.getElementById("item-id").value = item.id;
         document.getElementById("item-name").value = item.name;
         document.getElementById("item-price").value = item.price;
         document.getElementById("item-image").value = item.image_url || "";
-        document.getElementById("item-type").value = (item.type || 'beli').toLowerCase();
+        const type = (item.type || 'beli').toLowerCase();
+        document.getElementById("item-type").value = type;
+
+        // JUAL status comes from the product itself. Never derive it from BUY stock.
+        const backendStatus = String(item.stock_status || 'ready').toLowerCase();
+        const cachedJualStatus = type === 'jual' ? getSavedJualStatus(item.id) : '';
+        const savedStatus = cachedJualStatus || backendStatus;
+        document.getElementById("item-status").value = type === 'jual'
+          ? (savedStatus === 'empty' ? 'empty' : 'ready')
+          : (['ready','limited','empty'].includes(savedStatus) ? savedStatus : 'ready');
         syncItemStatusOptions();
-        document.getElementById("item-status").value = item.stock_status || "ready";
-        syncItemStatusOptions();
+
         const savedOverride = getStockOverrides()[String(item.id)];
-        const isBglBuy = (item.type || 'beli').toLowerCase() === 'beli' && /blue gem lock/i.test(item.name || '');
-        const isDlBuy = (item.type || 'beli').toLowerCase() === 'beli' && /diamond lock/i.test(item.name || '');
+        const isBglBuy = type === 'beli' && /blue gem lock/i.test(item.name || '');
+        const isDlBuy = type === 'beli' && /diamond lock/i.test(item.name || '');
         const unified = getUnifiedLockStockDL();
-        const isJual = (item.type || 'beli').toLowerCase() === 'jual';
-        document.getElementById("item-stock-qty").value = isJual ? '' : (isDlBuy ? (unified === null ? '' : (unified/100).toFixed(2).replace(/\.00$/, '')) : (isBglBuy ? (unified === null ? '' : (unified/100).toFixed(2).replace(/\.00$/, '')) : (savedOverride !== undefined ? savedOverride : (getStockQuantity(item) ?? ""))));
-        document.getElementById("item-stock-qty").disabled = isJual || isDlBuy;
-        document.getElementById("item-stock-qty").title = isJual ? 'Katalog JUAL tidak menggunakan stok.' : (isDlBuy ? 'Stok DL mengikuti stok BGL.' : '');
+        const stockInput = document.getElementById("item-stock-qty");
+        if (type === 'jual') {
+          stockInput.value = '';
+          stockInput.disabled = true;
+        } else {
+          stockInput.value = isDlBuy
+            ? (unified === null ? '' : (unified/100).toFixed(2).replace(/\.00$/, ''))
+            : (isBglBuy
+              ? (unified === null ? '' : (unified/100).toFixed(2).replace(/\.00$/, ''))
+              : (savedOverride !== undefined ? savedOverride : (getStockQuantity(item) ?? "")));
+          stockInput.disabled = isDlBuy;
+          stockInput.title = isDlBuy ? 'Stok DL mengikuti stok BGL.' : '';
+        }
         document.getElementById("form-btn").innerText = "Simpan Perubahan";
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
@@ -2655,17 +2689,20 @@ Terima kasih 🙏`;
       const image_url = document.getElementById("item-image").value;
       const type = document.getElementById("item-type").value;
       const stockRaw = document.getElementById("item-stock-qty").value;
+      const isJual = type === 'jual';
       const isBglBuy = type === 'beli' && /blue gem lock/i.test(name);
       const isDlBuy = type === 'beli' && /diamond lock/i.test(name);
-      const enteredBgl = stockRaw === '' ? null : Math.max(0, Number(String(stockRaw).replace(',', '.')) || 0);
-      const stock_quantity = type === 'jual' ? null : (isBglBuy && enteredBgl !== null ? Math.round(enteredBgl * 100) : (isDlBuy ? null : (enteredBgl === null ? null : Math.floor(enteredBgl))));
-      const displayBgl = type === 'jual' ? null : (isBglBuy && enteredBgl !== null ? enteredBgl : (isDlBuy ? (getUnifiedLockStockDL() === null ? null : getUnifiedLockStockDL()/100) : enteredBgl));
+      const enteredBgl = isJual ? null : (stockRaw === '' ? null : Math.max(0, Number(String(stockRaw).replace(',', '.')) || 0));
+      const stock_quantity = isJual ? null : (isBglBuy && enteredBgl !== null ? Math.round(enteredBgl * 100) : (isDlBuy ? null : (enteredBgl === null ? null : Math.floor(enteredBgl))));
       const selectedStatus = String(document.getElementById("item-status").value || 'ready').toLowerCase();
-      const stock_status = type === 'jual'
+      // JUAL uses only OPEN/CLOSED. It never reads or derives status from stock.
+      const stock_status = isJual
         ? (selectedStatus === 'empty' ? 'empty' : 'ready')
         : (stock_quantity === 0 ? 'empty' : stock_quantity !== null && stock_quantity <= 100 ? 'limited' : 'ready');
-      const payload = { name, price, image_url, type, stock_status, stock_quantity };
-      if (type === 'jual' || isDlBuy) delete payload.stock_quantity;
+      if (isJual && id) setSavedJualStatus(id, stock_status);
+      const payload = { name, price, image_url, type, stock_status };
+      if (!isJual) payload.stock_quantity = stock_quantity;
+      if (isDlBuy) delete payload.stock_quantity;
       const headers = { "Content-Type": "application/json", "x-admin-key": adminKey };
       try {
         const url = id ? `${API_URL}/items/${id}` : `${API_URL}/items`;
@@ -2688,12 +2725,20 @@ Terima kasih 🙏`;
         resetForm();
         itemsLoadPromise = null;
         await loadItems();
-        showToast('Produk dan stok berhasil disimpan.');
+        if (isJual && savedId) {
+          const localSaved = itemsData.find(x => String(x.id) === String(savedId));
+          if (localSaved) { localSaved.stock_status = stock_status; localSaved.stock_quantity = null; }
+          filterProducts();
+        }
+        showToast(isJual ? 'Produk JUAL berhasil disimpan.' : 'Produk dan stok berhasil disimpan.');
       } catch (err) {
         console.error('TAASTORE save item error:', err);
-        if (id && stock_quantity !== null) {
+        if (id) {
           const local = itemsData.find(x => String(x.id) === String(id));
-          if (local) { local.stock_quantity = stock_quantity; local.stock_status = stock_status; }
+          if (local) {
+            if (isJual) { local.stock_quantity = null; local.stock_status = stock_status; }
+            else if (stock_quantity !== null) { local.stock_quantity = stock_quantity; local.stock_status = stock_status; }
+          }
           filterProducts();
         }
         showToast(err?.message || 'Gagal menyimpan produk/stok.', true);
@@ -2718,6 +2763,7 @@ Terima kasih 🙏`;
       document.getElementById("item-stock-qty").value = "";
       document.getElementById("item-stock-qty").disabled = false;
       document.getElementById("item-stock-qty").title = "";
+      syncItemStatusOptions();
       document.getElementById("form-btn").innerText = "Tambah Produk";
     }
     loadCartItems();
