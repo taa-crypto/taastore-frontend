@@ -415,14 +415,14 @@
             </div>
             <button onclick="logoutAdmin()" class="shrink-0 text-xs bg-rose-900/80 text-rose-300 px-3 py-1.5 rounded-lg border border-rose-700/50 hover:bg-rose-800">Logout</button>
           </div>
-          <div class="grid grid-cols-3 gap-2">
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <button type="button" onclick="showAdminSection('catalog')" class="admin-nav-btn text-[11px] font-black px-2.5 py-2 rounded-xl border border-amber-500/30 text-amber-300 bg-amber-500/10">📦 Katalog</button>
             <button type="button" onclick="showAdminSection('orders')" class="admin-nav-btn text-[11px] font-black px-2.5 py-2 rounded-xl border border-slate-700 text-slate-400">🧾 Pesanan</button>
+            <button type="button" onclick="showAdminSection('reviews')" class="admin-nav-btn text-[11px] font-black px-2.5 py-2 rounded-xl border border-slate-700 text-slate-400">💬 Testimoni</button>
             <button type="button" onclick="showAdminSection('settings')" class="admin-nav-btn text-[11px] font-black px-2.5 py-2 rounded-xl border border-slate-700 text-slate-400">⚙️ Pengaturan</button>
           </div>
         </div>
-        <details id="admin-settings-section" class="hidden mb-4 rounded-2xl border border-slate-800 bg-slate-950/50 overflow-hidden">
-          <summary class="hidden">Pengaturan</summary>
+        <div id="admin-settings-section" class="hidden mb-4 rounded-2xl border border-slate-800 bg-slate-950/50 overflow-hidden">
           <div class="p-4">
             <div class="flex items-center justify-between gap-3 mb-4">
               <div>
@@ -464,7 +464,19 @@
               <button type="button" onclick="copyStoreAnnouncement()" class="mt-3 w-full sm:w-auto bg-cyan-600/80 hover:bg-cyan-600 text-white font-black text-xs px-4 py-2.5 rounded-xl border border-cyan-500/30">Copy Template</button>
             </div>
           </div>
-        </details>
+        </div>
+        <div id="admin-reviews-section" class="hidden mb-4 rounded-2xl border border-slate-800 bg-slate-950/50 overflow-hidden">
+          <div class="p-4">
+            <div class="flex items-center justify-between gap-3 mb-3">
+              <div>
+                <div class="text-sm font-black text-amber-300">💬 Kelola Testimoni</div>
+                <div class="text-[10px] text-slate-500 mt-1">Lihat dan hapus testimoni pelanggan dari panel admin.</div>
+              </div>
+              <button type="button" onclick="loadAdminReviews()" class="text-[10px] px-3 py-2 rounded-xl border border-slate-700 text-slate-300 hover:bg-slate-800">Refresh</button>
+            </div>
+            <div id="admin-reviews-list" class="space-y-3"></div>
+          </div>
+        </div>
         <details id="admin-catalog-section" open class="rounded-2xl border border-slate-800 bg-slate-950/50 overflow-hidden">
           <summary class="cursor-pointer select-none px-4 py-3 text-sm font-black text-amber-300 hover:bg-slate-900/70">📦 Kelola Katalog</summary>
           <div class="p-4 border-t border-slate-800">
@@ -521,7 +533,7 @@
 
       <!-- Keranjang -->
       <div class="flex justify-end mb-4">
-        <button type="button" onclick="openCartCheckout()" class="inline-flex items-center gap-2 bg-slate-900/90 hover:bg-slate-800 border border-cyan-500/30 text-cyan-300 font-bold text-xs px-4 py-2.5 rounded-xl transition shadow-lg">
+        <button id="cart-button" type="button" onclick="openCartCheckout()" aria-label="Buka Keranjang" class="fixed bottom-20 right-4 md:right-6 z-40 inline-flex items-center gap-2 bg-slate-900/95 hover:bg-slate-800 border border-cyan-500/40 text-cyan-300 font-bold text-xs px-4 py-3 rounded-2xl transition-all duration-300 shadow-2xl shadow-cyan-500/10 backdrop-blur-md">
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 4h2l2.1 10.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 1.95-1.56L20 7H6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="20" r="1.2" fill="currentColor"/><circle cx="18" cy="20" r="1.2" fill="currentColor"/></svg>
           Keranjang <span id="cart-badge" class="min-w-5 h-5 px-1 rounded-full bg-amber-500 text-slate-950 text-[10px] font-black flex items-center justify-center">0</span>
         </button>
@@ -2118,6 +2130,14 @@
     function updateCartBadge() {
       const el=document.getElementById('cart-badge'); if(el) el.textContent=String(cartItems.reduce((n,x)=>n+(Number(x.qty)||0),0));
     }
+    function guideToCart() {
+      const btn=document.getElementById('cart-button');
+      if(!btn) return;
+      btn.classList.remove('ring-2','ring-amber-400','scale-105','animate-pulse');
+      void btn.offsetWidth;
+      btn.classList.add('ring-2','ring-amber-400','scale-105','animate-pulse');
+      setTimeout(() => btn.classList.remove('ring-2','ring-amber-400','scale-105','animate-pulse'), 1800);
+    }
     function addToCart(id, qty=1) {
       if(!guardNewTransaction()) return;
       const item=itemsData.find(i=>String(i.id)===String(id));
@@ -2149,10 +2169,8 @@
       else cartItems.push({product_id:item.id, product:item.name, unit_price:Number(item.price)||0, qty:amount, local_image: cartProductIcon(item.name)});
       saveCartItems();
       playCyberBeep(900,'sine',0.06);
-      showToast('✓ Produk masuk ke keranjang.');
-      // Setelah memilih produk, arahkan langsung ke Keranjang agar pengguna awam
-      // langsung melihat barang yang baru ditambahkan dan tahu langkah berikutnya.
-      openCartCheckout();
+      guideToCart();
+      showToast('✓ Produk masuk ke keranjang • Tekan 🛒 Keranjang untuk lanjut.');
     }
     function changeCartQty(productId, delta) {
       const item=cartItems.find(x=>String(x.product_id)===String(productId)); if(!item)return;
@@ -2754,19 +2772,56 @@ Terima kasih 🙏`;
       }
     }
 
+    async function loadAdminReviews() {
+      if (!isAdmin) return;
+      const container = document.getElementById("admin-reviews-list");
+      if (!container) return;
+      container.innerHTML = '<div class="text-xs text-slate-500 py-4 text-center">Memuat testimoni...</div>';
+      let reviews = [];
+      try {
+        reviews = await supabaseRequest("reviews?select=*&order=created_at.desc");
+      } catch (err) {
+        console.warn("Admin reviews gagal dimuat:", err);
+        container.innerHTML = '<div class="text-xs text-rose-300 py-4 text-center">Testimoni gagal dimuat. Cek koneksi/Supabase.</div>';
+        return;
+      }
+      if (!Array.isArray(reviews) || !reviews.length) {
+        container.innerHTML = '<div class="text-xs text-slate-500 py-6 text-center rounded-xl border border-slate-800 bg-slate-950/50">Belum ada testimoni.</div>';
+        return;
+      }
+      container.innerHTML = reviews.map(rev => {
+        const orderId = escapeReviewText(rev.order_id || '');
+        const displayName = rev.anonymous === false ? maskGrowID(rev.name || 'Customer') : 'Anonymous';
+        return `<div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="text-xs font-black text-slate-200 truncate">${escapeReviewText(displayName)}</div>
+              <div class="mt-1">${starIcons(rev.rating)}</div>
+            </div>
+            <button type="button" onclick="deleteReview('${orderId}')" class="shrink-0 text-[10px] px-2.5 py-1.5 rounded-lg border border-rose-500/30 text-rose-300 hover:bg-rose-500/10">Hapus</button>
+          </div>
+          <div class="text-[11px] text-slate-400 mt-2">${escapeReviewText(rev.comment || '')}</div>
+          <div class="text-[9px] text-slate-600 mt-2">${escapeReviewText(rev.order_id || '')}${rev.verified ? ' • ✓ Verified' : ''}</div>
+        </div>`;
+      }).join('');
+    }
+
     function showAdminSection(section) {
       if (!isAdmin) return;
       const catalog = document.getElementById('admin-catalog-section');
       const settings = document.getElementById('admin-settings-section');
       const orders = document.getElementById('admin-orders-panel');
+      const reviews = document.getElementById('admin-reviews-section');
       const buttons = Array.from(document.querySelectorAll('.admin-nav-btn'));
       const active = 'text-[11px] font-black px-2.5 py-2 rounded-xl border border-amber-500/30 text-amber-300 bg-amber-500/10';
       const inactive = 'text-[11px] font-black px-2.5 py-2 rounded-xl border border-slate-700 text-slate-400';
-      buttons.forEach((btn, i) => { btn.className = (i === ({catalog:0,orders:1,settings:2}[section] ?? 0)) ? `admin-nav-btn ${active}` : `admin-nav-btn ${inactive}`; });
+      buttons.forEach((btn, i) => { btn.className = (i === ({catalog:0,orders:1,reviews:2,settings:3}[section] ?? 0)) ? `admin-nav-btn ${active}` : `admin-nav-btn ${inactive}`; });
       if (catalog) catalog.classList.toggle('hidden', section !== 'catalog');
       if (settings) settings.classList.toggle('hidden', section !== 'settings');
       if (orders) orders.classList.toggle('hidden', section !== 'orders');
+      if (reviews) reviews.classList.toggle('hidden', section !== 'reviews');
       if (section === 'orders') loadAdminOrders();
+      if (section === 'reviews') loadAdminReviews();
       if (section === 'settings') {
         applyStoreStatusUI();
         const activeMessages = document.querySelectorAll('[data-running-message]');
