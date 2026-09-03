@@ -1154,7 +1154,6 @@
       loadGlobalFavorites();
     }
     const STOCK_CACHE_KEY = "taastore_stock_overrides_v1";
-    const JUAL_STATUS_CACHE_KEY = "taastore_jual_status_overrides_v1";
     const STOCK_REMOTE_CACHE_KEY = "taastore_remote_stock_v1";
     let remoteStockMap = {};
     let remoteStockLoaded = false;
@@ -1308,35 +1307,21 @@
         localStorage.setItem(STOCK_CACHE_KEY, JSON.stringify(map));
       } catch (_) {}
     }
-    function getJualStatusOverrides() {
-      try { return JSON.parse(localStorage.getItem(JUAL_STATUS_CACHE_KEY) || "{}"); } catch (_) { return {}; }
-    }
-    function setJualStatusOverride(id, status) {
-      try {
-        const map = getJualStatusOverrides();
-        map[String(id)] = String(status).toLowerCase() === 'empty' ? 'empty' : 'ready';
-        localStorage.setItem(JUAL_STATUS_CACHE_KEY, JSON.stringify(map));
-      } catch (_) {}
-    }
     function clearStockOverrides() { try { localStorage.removeItem(STOCK_CACHE_KEY); } catch (_) {} }
     function applyStockOverrides(list) {
       const overrides = getStockOverrides();
-      const jualStatus = getJualStatusOverrides();
       if (!Array.isArray(list)) return list;
       return list.map(item => {
         const key = String(item?.id ?? '');
-        let next = item;
         if (key && Object.prototype.hasOwnProperty.call(remoteStockMap, key)) {
           const q = Math.max(0, Math.floor(Number(remoteStockMap[key]) || 0));
-          next = { ...next, stock_quantity: q, stock_status: q === 0 ? 'empty' : q <= 3 ? 'limited' : 'ready' };
-        } else if (key && Object.prototype.hasOwnProperty.call(overrides, key)) {
+          return { ...item, stock_quantity: q, stock_status: q === 0 ? 'empty' : q <= 3 ? 'limited' : 'ready' };
+        }
+        if (key && Object.prototype.hasOwnProperty.call(overrides, key)) {
           const q = Math.max(0, Math.floor(Number(overrides[key]) || 0));
-          next = { ...next, stock_quantity: q, stock_status: q === 0 ? 'empty' : q <= 100 ? 'limited' : 'ready' };
+          return { ...item, stock_quantity: q, stock_status: q === 0 ? 'empty' : q <= 3 ? 'limited' : 'ready' };
         }
-        if (String(next?.type || '').toLowerCase() === 'jual' && key && Object.prototype.hasOwnProperty.call(jualStatus, key)) {
-          next = { ...next, stock_status: jualStatus[key] === 'empty' ? 'empty' : 'ready' };
-        }
-        return next;
+        return item;
       });
     }
 
@@ -2627,10 +2612,14 @@ Terima kasih 🙏`;
         statusEl.innerHTML = '<option value="ready">OPEN</option><option value="empty">CLOSED</option>';
         statusEl.value = current === 'empty' ? 'empty' : 'ready';
         statusEl.title = 'Status katalog JUAL: OPEN menerima penjualan, CLOSED tidak menampung DL/BGL.';
+        const stockInput = document.getElementById('item-stock-qty');
+        if (stockInput) { stockInput.value = ''; stockInput.disabled = true; stockInput.placeholder = 'Stok tidak digunakan untuk JUAL'; }
       } else {
         statusEl.innerHTML = '<option value="ready">Ready</option><option value="limited">Limited</option><option value="empty">Out of Stock</option>';
         statusEl.value = ['ready','limited','empty'].includes(current) ? current : 'ready';
         statusEl.title = 'Status BELI mengikuti stok otomatis.';
+        const stockInput = document.getElementById('item-stock-qty');
+        if (stockInput) { stockInput.disabled = false; stockInput.placeholder = 'Stok BGL (1 BGL = 100 DL)'; }
       }
     }
     document.getElementById("item-type")?.addEventListener('change', syncItemStatusOptions);
@@ -2644,17 +2633,16 @@ Terima kasih 🙏`;
         document.getElementById("item-image").value = item.image_url || "";
         document.getElementById("item-type").value = (item.type || 'beli').toLowerCase();
         syncItemStatusOptions();
-        const jualStatusOverride = getJualStatusOverrides()[String(item.id)];
-        document.getElementById("item-status").value = ((item.type || '').toLowerCase() === 'jual' && jualStatusOverride) ? jualStatusOverride : (item.stock_status || "ready");
+        document.getElementById("item-status").value = item.stock_status || "ready";
         syncItemStatusOptions();
-        if ((item.type || '').toLowerCase() === 'jual' && jualStatusOverride) document.getElementById("item-status").value = jualStatusOverride;
         const savedOverride = getStockOverrides()[String(item.id)];
         const isBglBuy = (item.type || 'beli').toLowerCase() === 'beli' && /blue gem lock/i.test(item.name || '');
         const isDlBuy = (item.type || 'beli').toLowerCase() === 'beli' && /diamond lock/i.test(item.name || '');
         const unified = getUnifiedLockStockDL();
-        document.getElementById("item-stock-qty").value = isDlBuy ? (unified === null ? '' : (unified/100).toFixed(2).replace(/\.00$/, '')) : (isBglBuy ? (unified === null ? '' : (unified/100).toFixed(2).replace(/\.00$/, '')) : (savedOverride !== undefined ? savedOverride : (getStockQuantity(item) ?? "")));
-        document.getElementById("item-stock-qty").disabled = isDlBuy;
-        document.getElementById("item-stock-qty").title = isDlBuy ? 'Stok DL mengikuti stok BGL.' : '';
+        const isJual = (item.type || 'beli').toLowerCase() === 'jual';
+        document.getElementById("item-stock-qty").value = isJual ? '' : (isDlBuy ? (unified === null ? '' : (unified/100).toFixed(2).replace(/\.00$/, '')) : (isBglBuy ? (unified === null ? '' : (unified/100).toFixed(2).replace(/\.00$/, '')) : (savedOverride !== undefined ? savedOverride : (getStockQuantity(item) ?? ""))));
+        document.getElementById("item-stock-qty").disabled = isJual || isDlBuy;
+        document.getElementById("item-stock-qty").title = isJual ? 'Katalog JUAL tidak menggunakan stok.' : (isDlBuy ? 'Stok DL mengikuti stok BGL.' : '');
         document.getElementById("form-btn").innerText = "Simpan Perubahan";
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
@@ -2670,14 +2658,14 @@ Terima kasih 🙏`;
       const isBglBuy = type === 'beli' && /blue gem lock/i.test(name);
       const isDlBuy = type === 'beli' && /diamond lock/i.test(name);
       const enteredBgl = stockRaw === '' ? null : Math.max(0, Number(String(stockRaw).replace(',', '.')) || 0);
-      const stock_quantity = isBglBuy && enteredBgl !== null ? Math.round(enteredBgl * 100) : (isDlBuy ? null : (enteredBgl === null ? null : Math.floor(enteredBgl)));
-      const displayBgl = isBglBuy && enteredBgl !== null ? enteredBgl : (isDlBuy ? (getUnifiedLockStockDL() === null ? null : getUnifiedLockStockDL()/100) : enteredBgl);
+      const stock_quantity = type === 'jual' ? null : (isBglBuy && enteredBgl !== null ? Math.round(enteredBgl * 100) : (isDlBuy ? null : (enteredBgl === null ? null : Math.floor(enteredBgl))));
+      const displayBgl = type === 'jual' ? null : (isBglBuy && enteredBgl !== null ? enteredBgl : (isDlBuy ? (getUnifiedLockStockDL() === null ? null : getUnifiedLockStockDL()/100) : enteredBgl));
       const selectedStatus = String(document.getElementById("item-status").value || 'ready').toLowerCase();
       const stock_status = type === 'jual'
         ? (selectedStatus === 'empty' ? 'empty' : 'ready')
         : (stock_quantity === 0 ? 'empty' : stock_quantity !== null && stock_quantity <= 100 ? 'limited' : 'ready');
       const payload = { name, price, image_url, type, stock_status, stock_quantity };
-      if (isDlBuy) delete payload.stock_quantity;
+      if (type === 'jual' || isDlBuy) delete payload.stock_quantity;
       const headers = { "Content-Type": "application/json", "x-admin-key": adminKey };
       try {
         const url = id ? `${API_URL}/items/${id}` : `${API_URL}/items`;
@@ -2689,10 +2677,6 @@ Terima kasih 🙏`;
         let savedProduct = null;
         try { savedProduct = await response.json(); } catch (_) {}
         const savedId = id || (Array.isArray(savedProduct) ? savedProduct[0]?.id : null) || savedProduct?.id || savedProduct?.item?.id || savedProduct?.data?.id || '';
-
-        if (savedId && type === 'jual') {
-          setJualStatusOverride(savedId, stock_status);
-        }
 
         if (savedId && (isBglBuy || (!isDlBuy && stock_quantity !== null))) {
           setStockOverride(savedId, stock_quantity === null ? 0 : stock_quantity);
