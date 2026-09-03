@@ -1202,6 +1202,8 @@
       if (!Array.isArray(list)) return list;
       const source = map || {};
       return list.map(item => {
+        // JUAL has its own OPEN/CLOSED state. Never let BUY stock sync overwrite it.
+        if (isJualItem(item)) return item;
         const key = String(item?.id ?? '');
         if (key && Object.prototype.hasOwnProperty.call(source, key)) {
           const q = Math.max(0, Math.floor(Number(source[key]) || 0));
@@ -1426,6 +1428,11 @@
       if (stock === 0) return 'empty';
       if (stock !== null && ((lockKind(item)==='BGL' && stock <= 3) || (lockKind(item)==='DL' && stock <= 100) || stock <= 3)) return 'limited';
       return String(item?.stock_status || 'ready').toLowerCase();
+    }
+
+    function getJualStatus(item) {
+      const raw = String(item?.jual_status ?? item?.stock_status ?? '').trim().toUpperCase();
+      return (raw === 'CLOSED' || raw === 'EMPTY' || raw === 'CLOSE' || raw === 'OUT OF STOCK') ? 'CLOSED' : 'OPEN';
     }
 
     function renderProducts(data) {
@@ -2731,8 +2738,8 @@ Terima kasih 🙏`;
       if (stockEl) stockEl.disabled = isJual;
       const current = String(statusEl.value || '').toLowerCase();
       if (isJual) {
-        statusEl.innerHTML = '<option value="ready">OPEN</option><option value="empty">CLOSED</option>';
-        statusEl.value = current === 'empty' ? 'empty' : 'ready';
+        statusEl.innerHTML = '<option value="OPEN">OPEN</option><option value="CLOSED">CLOSED</option>';
+        statusEl.value = current === 'empty' || current === 'closed' ? 'CLOSED' : 'OPEN';
         statusEl.title = 'Status katalog JUAL: OPEN menerima penjualan, CLOSED tidak menampung DL/BGL.';
       } else {
         statusEl.innerHTML = '<option value="ready">Ready</option><option value="limited">Limited</option><option value="empty">Out of Stock</option>';
@@ -2756,7 +2763,9 @@ Terima kasih 🙏`;
       document.getElementById("item-type").value = isJual ? "jual" : "beli";
 
       syncItemStatusOptions();
-      document.getElementById("item-status").value = String(item.stock_status || "ready").toLowerCase() === "empty" ? "empty" : "ready";
+      document.getElementById("item-status").value = isJual
+        ? (getJualStatus(item) === 'CLOSED' ? 'CLOSED' : 'OPEN')
+        : (String(item.stock_status || "ready").toLowerCase() === "empty" ? "empty" : "ready");
 
       const stockEl = document.getElementById("item-stock-qty");
       const stockWrap = document.getElementById("item-stock-wrap");
@@ -2810,9 +2819,9 @@ Terima kasih 🙏`;
         ? Math.round(enteredBgl * 100)
         : (isDlBuy ? null : (enteredBgl === null ? null : Math.floor(enteredBgl)));
 
-      const selectedStatus = String(document.getElementById("item-status").value || 'ready').toLowerCase();
+      const selectedStatus = String(document.getElementById("item-status").value || 'ready').toUpperCase();
       const stock_status = isJual
-        ? (selectedStatus === 'empty' ? 'empty' : 'ready') // OPEN / CLOSED for JUAL
+        ? (selectedStatus === 'CLOSED' ? 'empty' : 'ready') // UI: OPEN/CLOSED; DB stays ready/empty for compatibility
         : (stock_quantity === 0
             ? 'empty'
             : stock_quantity !== null && stock_quantity <= 100 ? 'limited' : 'ready');
