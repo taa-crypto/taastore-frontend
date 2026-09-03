@@ -1370,40 +1370,75 @@
       return q;
     }
 
-    async function decrementRemoteStock(productId, amount) {
+    async function reserveStockAtomic(productId, amount) {
       const key = String(productId ?? '');
       const n = Math.max(0, Math.floor(Number(amount) || 0));
       if (!key || n <= 0) return true;
       const item = itemsData.find(x => String(x.id) === key);
       const kind = lockKind(item);
       try {
-        if (kind !== 'BGL' && kind !== 'DL') {
-          const rows = await supabaseRequest(`product_stock?select=product_id,stock_quantity&product_id=eq.${encodeURIComponent(key)}&limit=1`);
-          if (!Array.isArray(rows) || !rows[0]) throw new Error('Stok server tidak ditemukan.');
-          const current = Math.max(0, Math.floor(Number(rows[0].stock_quantity) || 0));
-          if (current < n) throw new Error(`Stok ${item?.name || key} tidak cukup.`);
-          await supabaseRequest(`product_stock?product_id=eq.${encodeURIComponent(key)}`, {method:'PATCH',headers:{'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({stock_quantity:current-n})});
-          remoteStockMap[key]=current-n; saveRemoteStockCache(remoteStockMap); return true;
+        if (kind === 'BGL' || kind === 'DL') {
+          const { bgl, dl } = getLockItems();
+          const bglId = Number(bgl?.id || 0);
+          const dlId = Number(dl?.id || 0);
+          if (!bglId) throw new Error('Produk BGL belum tersedia.');
+          const costDL = kind === 'BGL' ? n * 100 : n;
+          const result = await supabaseRequest('rpc/reserve_lock_stock', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+            body: JSON.stringify({ p_bgl_id: bglId, p_dl_id: dlId || null, p_amount_dl: costDL })
+          });
+          const remainingDL = Math.max(0, Math.floor(Number(result?.remaining_dl ?? result?.[0]?.remaining_dl) || 0));
+          if (Number.isFinite(remainingDL)) {
+            remoteStockMap[String(bglId)] = remainingDL;
+            if (dlId) remoteStockMap[String(dlId)] = remainingDL;
+            saveRemoteStockCache(remoteStockMap);
+          }
+          return true;
         }
-        const {bgl, dl} = getLockItems();
-        const bglId = bgl ? String(bgl.id) : '';
-        const dlId = dl ? String(dl.id) : '';
-        if (!bglId) throw new Error('Produk BGL belum tersedia.');
-        const rows = await supabaseRequest(`product_stock?select=product_id,stock_quantity&product_id=eq.${encodeURIComponent(bglId)}&limit=1`);
-        if (!Array.isArray(rows) || !rows[0]) throw new Error('Stok BGL belum diatur.');
-        const totalDL = Math.max(0, Math.floor(Number(rows[0].stock_quantity) || 0));
-        const costDL = kind === 'BGL' ? n * 100 : n;
-        if (totalDL < costDL) {
-          const availableBGL = (totalDL / 100).toFixed(2).replace(/\.00$/, '');
-          throw new Error(`Stok tidak cukup. Tersedia ${availableBGL} BGL (${totalDL} DL).`);
+        await supabaseRequest('rpc/reserve_product_stock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+          body: JSON.stringify({ p_product_id: Number(key), p_amount: n })
+        });
+        const rows = await supabaseRequest(`product_stock?select=product_id,stock_quantity&product_id=eq.${encodeURIComponent(key)}&limit=1`);
+        if (Array.isArray(rows) && rows[0]) {
+          remoteStockMap[key] = Math.max(0, Math.floor(Number(rows[0].stock_quantity) || 0));
+          saveRemoteStockCache(remoteStockMap);
         }
-        await setUnifiedLockStockDL(totalDL - costDL);
         return true;
-      } catch(err) {
-        console.warn('TAASTORE remote stock decrement failed:', err);
-        if (err?.message) throw err;
-        return false;
+      } catch (err) {
+        console.warn('TAASTORE atomic stock reservation failed:', err);
+        throw err;
       }
+    }
+    async function restoreReservedStockAtomic(productId, amount) {
+      const key = String(productId ?? '');
+      const n = Math.max(0, Math.floor(Number(amount) || 0));
+      if (!key || n <= 0) return true;
+      const item = itemsData.find(x => String(x.id) === key);
+      const kind = lockKind(item);
+      if (kind === 'BGL' || kind === 'DL') {
+        const { bgl, dl } = getLockItems();
+        const bglId = Number(bgl?.id || 0), dlId = Number(dl?.id || 0);
+        if (!bglId) return false;
+        const costDL = kind === 'BGL' ? n * 100 : n;
+        const result = await supabaseRequest('rpc/restore_lock_stock', {
+          method:'POST', headers:{'Content-Type':'application/json','Prefer':'return=representation'},
+          body:JSON.stringify({p_bgl_id:bglId,p_dl_id:dlId||null,p_amount_dl:costDL})
+        });
+        const remainingDL = Math.max(0, Math.floor(Number(result?.remaining_dl ?? result?.[0]?.remaining_dl) || 0));
+        remoteStockMap[String(bglId)] = remainingDL; if (dlId) remoteStockMap[String(dlId)] = remainingDL; saveRemoteStockCache(remoteStockMap); return true;
+      }
+      await supabaseRequest('rpc/restore_product_stock', {
+        method:'POST', headers:{'Content-Type':'application/json','Prefer':'return=representation'},
+        body:JSON.stringify({p_product_id:Number(key),p_amount:n})
+      });
+      return true;
+    }
+    async function decrementRemoteStock(productId, amount) {
+      // Kept as a compatibility wrapper. New BUY checkout uses the atomic RPC.
+      return reserveStockAtomic(productId, amount);
     }
     function getStockOverrides() {
       try { return JSON.parse(localStorage.getItem(STOCK_CACHE_KEY) || "{}"); } catch (_) { return {}; }
@@ -1481,10 +1516,14 @@
     function getCartReservedEquivalentDL(excludeProductId='') {
       return cartItems.reduce((sum, c) => {
         if (excludeProductId && String(c.product_id) === String(excludeProductId)) return sum;
-        const kind=lockKind(itemsData.find(i=>String(i.id)===String(c.product_id)));
-        const qty=Math.max(0,Math.floor(Number(c.qty)||0));
-        return sum + (kind==='BGL' ? qty*100 : kind==='DL' ? qty : 0);
-      },0);
+        // Prefer the live catalog item, but fall back to the product name stored in
+        // the cart. This makes BGL/DL reservation enforcement deterministic even
+        // when the catalog has just refreshed and an old cart item is present.
+        const catalogItem = itemsData.find(i => String(i.id) === String(c.product_id));
+        const kind = lockKind(catalogItem || { name: c.product || '' });
+        const qty = Math.max(0, Math.floor(Number(c.qty) || 0));
+        return sum + (kind === 'BGL' ? qty * 100 : kind === 'DL' ? qty : 0);
+      }, 0);
     }
     function getRemainingOrderableStock(item) {
       if (!item || isJualItem(item)) return null;
@@ -2174,15 +2213,18 @@
       const current=existing ? Math.max(0,Number(existing.qty)||0) : 0;
       const kind=lockKind(item);
       if(kind==='BGL' || kind==='DL') {
-        const totalDL=getUnifiedLockStockDL();
+        const totalDL = getUnifiedLockStockDL();
         if(totalDL !== null) {
-          const reserved=getCartReservedEquivalentDL();
-          const addCost=kind==='BGL' ? amount*100 : amount;
-          const remaining=Math.max(0,totalDL-reserved);
-          if(addCost>remaining) {
-            const unit=kind==='BGL' ? 'BGL' : 'DL';
-            const maxAdd=kind==='BGL' ? Math.floor(remaining/100) : remaining;
-            showToast(maxAdd>0 ? `Stok tersisa ${remaining} DL. Maksimal tambah ${maxAdd} ${unit}.` : 'Stok tidak mencukupi untuk jumlah tersebut.', true);
+          const reserved = getCartReservedEquivalentDL();
+          const addCost = kind === 'BGL' ? amount * 100 : amount;
+          const remaining = Math.max(0, totalDL - reserved);
+          // Hard reservation check: the quantity already in the cart counts as
+          // consumed stock immediately. A BGL stock of 1 therefore permits only
+          // one BGL across the whole cart, regardless of repeated button clicks.
+          if(addCost > remaining) {
+            const unit = kind === 'BGL' ? 'BGL' : 'DL';
+            const maxAdd = kind === 'BGL' ? Math.floor(remaining / 100) : remaining;
+            showToast(maxAdd > 0 ? `Stok tersisa ${remaining} DL. Maksimal tambah ${maxAdd} ${unit}.` : 'Stok tidak mencukupi untuk jumlah tersebut.', true);
             return;
           }
         }
@@ -2386,22 +2428,15 @@
       const stockBeforeReservation = { ...remoteStockMap };
       try {
         for (const cart of cartItems) {
-          const ok = await decrementRemoteStock(cart.product_id, cart.qty);
-          if (!ok) throw new Error(`Gagal mengurangi stok ${cart.product}. Silakan coba lagi.`);
+          const ok = await reserveStockAtomic(cart.product_id, cart.qty);
+          if (!ok) throw new Error(`Gagal mengamankan stok ${cart.product}. Silakan coba lagi.`);
           reservedStocks.push({ product_id: cart.product_id, qty: Number(cart.qty) || 0 });
         }
         await supabaseRequest('orders',{method:'POST',headers:{'Prefer':'return=minimal'},body:JSON.stringify(order)});
       } catch(err){
         for (const reserved of reservedStocks) {
-          try {
-            const before = stockBeforeReservation[String(reserved.product_id)];
-            if (before !== undefined) await saveRemoteStock(reserved.product_id, before);
-          } catch (restoreErr) { console.warn('TAASTORE stock restore failed:', restoreErr); }
-        }
-        // Restore both lock inventories when a mixed BGL/DL reservation failed.
-        for (const id of [getLockItems().bgl?.id, getLockItems().dl?.id].filter(Boolean)) {
-          const before = stockBeforeReservation[String(id)];
-          if (before !== undefined) { try { await saveRemoteStock(id, before); } catch (_) {} }
+          try { await restoreReservedStockAtomic(reserved.product_id, reserved.qty); }
+          catch (restoreErr) { console.warn('TAASTORE atomic stock restore failed:', restoreErr); }
         }
         console.error('TAASTORE order/stock error:',err);
         showToast('❌ Pesanan gagal dibuat. Coba lagi atau hubungi Admin.',true);
@@ -2543,6 +2578,7 @@ Terima kasih 🙏`;
     function sellStatusLabel(order) {
       if (order.status === 'COMPLETED' || order.sell_status === 'SELL_COMPLETED') return 'SELESAI';
       if (order.sell_status === 'SELL_CANCELLED') return 'DIBATALKAN';
+      if (order.sell_status === 'SELL_PROOF_SUBMITTED') return 'BUKTI DROP TERKIRIM';
       if (order.sell_status === 'SELL_WAITING_DROP') return 'MENUNGGU DROP';
       return 'MENUNGGU KONFIRMASI';
     }
@@ -2564,7 +2600,7 @@ Terima kasih 🙏`;
           return `Halo kak 👋\n\nTerima kasih sudah mengajukan penjualan di TAASTORE.\n\n━━━━━━━━━━━━━━━━━━━━\n🆔 Order ID: ${id}\n\n📦 Produk: ${product}\n🔢 Jumlah: ${sellQty} ${sellUnit} (${equivalentDL} DL)\n💰 Rate Take: Rp ${rateNum.toLocaleString('id-ID')} / BGL/DL\n💵 Total Pembayaran: Rp ${total.toLocaleString('id-ID')}\n━━━━━━━━━━━━━━━━━━━━\n\nMohon dicek kembali rate dan total pembayarannya ya kak.\n\nJika sudah sesuai dan ingin melanjutkan, silakan konfirmasi kepada kami.\n\nJika rate kurang sesuai, pengajuan dapat dibatalkan tanpa perlu melakukan drop.\n\nTerima kasih 🙏\n— TAASTORE`;
         }
         if (kind === 'payment') {
-          return `Halo kak 👋\n\nUntuk Order ID *${id}*, penjualan akan kami lanjutkan.\n\n📦 Produk: ${product}\n🔢 Jumlah: ${sellQty} ${sellUnit} (${equivalentDL} DL)\n\nUntuk pembayaran, kakak ingin menerima melalui metode apa?\n\nSilakan informasikan metode pembayaran beserta detail penerimaannya ya kak.\n\nSetelah itu kami berikan instruksi World Drop.\n\nTerima kasih 🙏\n— TAASTORE`;
+          return `Halo kak 👋\n\nUntuk Order ID *${id}*, drop sudah kami terima.\n\n📦 Produk: ${product}\n🔢 Jumlah: ${sellQty} ${sellUnit} (${equivalentDL} DL)\n\n💳 Untuk pembayaran hasil penjualan, kakak ingin menerima melalui metode apa?\n\nSilakan informasikan metode pembayaran beserta detail penerimaannya ya kak.\n\nSetelah detail pembayaran kami terima, pembayaran akan kami proses.\n\nTerima kasih 🙏\n— TAASTORE`;
         }
         if (kind === 'drop') {
           return `Halo kak 👋\n\nOrder ID *${id}* sudah siap untuk proses drop.\n\n━━━━━━━━━━━━━━━━━━━━\n📦 Produk: ${product}\n🔢 Jumlah: ${sellQty} ${sellUnit} (${equivalentDL} DL)\n🌎 World: [ISI WORLD ADMIN]\n📦 Tempat: Display Box\n━━━━━━━━━━━━━━━━━━━━\n\nSilakan melakukan drop sesuai instruksi di atas.\n\nSetelah selesai, silakan kirim screenshot sebagai bukti ya kak.\n\nMohon pastikan produk dan jumlahnya sesuai sebelum melakukan drop.\n\nTerima kasih 🙏\n— TAASTORE`;
@@ -2593,37 +2629,26 @@ Terima kasih 🙏`;
     window.taastoreSellProofCache = window.taastoreSellProofCache || {};
     window.taastoreBuyerProofCache = window.taastoreBuyerProofCache || {};
     function normalizeProofImageData(value) {
-      if (value && typeof value === 'object') value = value.data || value.url || value.image || '';
-      let data = String(value || '').trim();
+      if (value && typeof value === 'object') value = value.data || value.url || value.image || value.src || '';
+      let data = String(value || '').trim().replace(/^['"]|['"]$/g, '');
       if (!data) return '';
       if (/^data:image\//i.test(data) || /^https?:\/\//i.test(data) || /^blob:/i.test(data)) return data;
-      // Support a raw base64 value in case the database/client strips the data-URL prefix.
-      if (/^[A-Za-z0-9+/=\s]+$/.test(data) && data.length > 100) return `data:image/jpeg;base64,${data.replace(/\s+/g,'')}`;
+      // Supabase may contain a raw base64 string. Accept normal and URL-safe base64.
+      if (/^[A-Za-z0-9+/_=-\s]+$/.test(data) && data.length > 100) {
+        const raw = data.replace(/\s+/g,'').replace(/-/g,'+').replace(/_/g,'/');
+        const padded = raw + '='.repeat((4 - raw.length % 4) % 4);
+        return `data:image/jpeg;base64,${padded}`;
+      }
       return '';
     }
     function setProofImage(image, data) {
-      const oldUrl = image?.dataset?.proofBlobUrl;
-      if (oldUrl) { try { URL.revokeObjectURL(oldUrl); } catch (_) {} }
       if (!image) return '';
+      const oldUrl = image.dataset.proofBlobUrl;
+      if (oldUrl) { try { URL.revokeObjectURL(oldUrl); } catch (_) {} }
       image.dataset.proofBlobUrl = '';
       const normalized = normalizeProofImageData(data);
       if (!normalized) return '';
-      // Convert data URLs to Blob URLs for more reliable rendering on mobile browsers.
-      if (/^data:image\//i.test(normalized)) {
-        try {
-          const comma = normalized.indexOf(',');
-          const meta = normalized.slice(5, comma);
-          const raw = normalized.slice(comma + 1);
-          const binary = atob(raw);
-          const bytes = new Uint8Array(binary.length);
-          for (let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i);
-          const mime = (meta.split(';')[0] || 'image/jpeg');
-          const blobUrl = URL.createObjectURL(new Blob([bytes], {type:mime}));
-          image.dataset.proofBlobUrl = blobUrl;
-          image.src = blobUrl;
-          return blobUrl;
-        } catch (err) { console.warn('Proof Blob URL fallback:', err); }
-      }
+      // Let the browser decode the data URL directly; this is more reliable for large screenshots on mobile.
       image.src = normalized;
       return normalized;
     }
@@ -2697,12 +2722,12 @@ Terima kasih 🙏`;
       let buttons = '';
       if (isSell) {
         if (statusText === 'MENUNGGU KONFIRMASI') buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','rate')" class="text-[10px] px-2.5 py-2 rounded-lg bg-amber-500 text-slate-950 font-black">💬 Konfirmasi Rate</button>`;
-        if (statusText === 'MENUNGGU DROP') buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','payment')" class="text-[10px] px-2.5 py-2 rounded-lg border border-cyan-500/30 text-cyan-300">💳 Tanya Payment</button><button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','drop')" class="text-[10px] px-2.5 py-2 rounded-lg bg-cyan-600/80 text-white font-bold">📦 Instruksi Drop</button>`;
-        if (o.sell_proof_data) buttons += `<button type="button" onclick="openSellProof('${escapeReviewText(o.order_id)}')" class="text-[10px] px-2.5 py-2 rounded-lg border border-cyan-500/30 text-cyan-300">📷 Lihat Bukti</button><button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','received')" class="text-[10px] px-2.5 py-2 rounded-lg border border-blue-500/30 text-blue-300">💬 Drop Diterima</button>`;
-        if (statusText !== 'DIBATALKAN' && statusText !== 'SELESAI') buttons += `<button type="button" onclick="completeOrder('${escapeReviewText(o.order_id)}')" class="text-[10px] px-2.5 py-2 rounded-lg bg-emerald-600/80 text-white font-bold">✓ Selesai / Bayar</button>`;
+        if (statusText === 'MENUNGGU DROP') buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','drop')" class="text-[10px] px-2.5 py-2 rounded-lg bg-cyan-600/80 text-white font-bold">📦 Instruksi Drop</button>`;
+        if (statusText === 'BUKTI DROP TERKIRIM') buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','payment')" class="text-[10px] px-2.5 py-2 rounded-lg border border-amber-500/30 text-amber-300 font-bold">💳 Tanya Payment</button>`;
+        if (statusText === 'BUKTI DROP TERKIRIM') buttons += `<button type="button" onclick="completeOrder('${escapeReviewText(o.order_id)}')" class="text-[10px] px-2.5 py-2 rounded-lg bg-emerald-600/80 text-white font-bold">✓ Selesai</button>`;
         if (statusText === 'SELESAI') buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','done')" class="text-[10px] px-2.5 py-2 rounded-lg border border-emerald-500/30 text-emerald-300">💬 Selesai</button>`;
       } else {
-        if (o.buyer_proof_data) buttons += `<button type="button" onclick="openBuyerProof('${escapeReviewText(o.order_id)}')" class="text-[10px] px-2.5 py-2 rounded-lg border border-cyan-500/30 text-cyan-300">📸 Lihat Bukti</button>`;
+        if (o.buyer_proof_data) buttons += '';
         if (o.status === 'WAITING_PAYMENT' && o.buyer_proof_data) buttons += `<button type="button" onclick="acceptBuyerPayment('${escapeReviewText(o.order_id)}')" class="text-[10px] px-2.5 py-2 rounded-lg bg-emerald-600/80 text-white font-bold">✓ Terima Pembayaran</button>`;
         if (o.status === 'PAID') buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','paid')" class="text-[10px] px-2.5 py-2 rounded-lg border border-emerald-500/30 text-emerald-300">💬 Kirim Update</button>`;
         if (o.status !== 'COMPLETED' && o.status !== 'PAID' && o.status !== 'CANCELLED') buttons += `<button type="button" onclick="openAdminWhatsApp('${escapeReviewText(o.order_id)}','payment')" class="text-[10px] px-2.5 py-2 rounded-lg border border-cyan-500/30 text-cyan-300">💬 Chat WhatsApp</button>`;
@@ -2717,7 +2742,8 @@ Terima kasih 🙏`;
           <div class="flex flex-wrap items-center gap-2"><span class="text-[11px] font-bold text-slate-500 font-mono">${escapeReviewText(o.order_id)}</span><span class="text-[10px] px-2 py-0.5 rounded-md border ${statusClass}">${statusText}</span><span class="text-[10px] px-2 py-0.5 rounded-md border border-cyan-700/40 text-cyan-300 bg-cyan-950/20">${isSell ? '💰 SELL' : '🛒 BUY'}</span></div>
           <p class="text-xs text-slate-200 mt-1 font-semibold">${escapeReviewText(o.product)} · ${isSell ? `${getSellDisplayQty(o)} ${getSellUnit(o)}` : `${Number(o.qty)||0}x · Rp ${Number(o.total||0).toLocaleString('id-ID')}`}</p>
           <p class="text-[10px] text-slate-500 mt-1">${escapeReviewText(customerLabel)} · GrowID: ${escapeReviewText(o.grow_id || '-')} · ${wa ? 'WA terhubung' : 'WA belum tersimpan'}</p>
-          ${isSell && o.sell_proof_data ? `<button type="button" onclick="openSellProof('${escapeReviewText(o.order_id)}')" class="text-[10px] text-cyan-300 underline mt-1">Lihat Bukti Drop</button>` : ''}
+          ${isSell && o.sell_proof_data ? `<button type="button" onclick="openSellProof('${escapeReviewText(o.order_id)}')" class="text-[10px] text-blue-300 hover:text-blue-200 underline mt-1 font-medium">Lihat Bukti Drop</button>` : ''}
+          ${!isSell && o.buyer_proof_data ? `<button type="button" onclick="openBuyerProof('${escapeReviewText(o.order_id)}')" class="text-[10px] text-blue-300 hover:text-blue-200 underline mt-1 font-medium">Lihat Bukti Pembayaran</button>` : ''}
         </div>
         <div class="shrink-0 flex flex-wrap gap-2 justify-end">${buttons}</div>
       </div>`;
