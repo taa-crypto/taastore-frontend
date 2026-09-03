@@ -407,12 +407,24 @@
 
       <!-- Panel Admin -->
       <section id="admin-panel" class="hidden mb-10 bg-slate-900/90 backdrop-blur-md p-6 rounded-2xl border border-amber-500/50 shadow-2xl">
-        <div class="flex justify-between items-center mb-4 border-b border-slate-800 pb-3">
-          <h2 class="text-lg font-bold text-amber-400">Panel Manajemen Produk (Protected)</h2>
-          <button onclick="logoutAdmin()" class="text-xs bg-rose-900/80 text-rose-300 px-3 py-1.5 rounded-lg border border-rose-700/50 hover:bg-rose-800">Logout Admin</button>
+        <div class="flex flex-col gap-3 mb-4 border-b border-slate-800 pb-3">
+          <div class="flex justify-between items-center gap-3">
+            <div>
+              <h2 class="text-lg font-bold text-amber-400">Panel Admin</h2>
+              <p class="text-[10px] text-slate-500 mt-0.5">Kelola toko tanpa memenuhi layar.</p>
+            </div>
+            <button onclick="logoutAdmin()" class="shrink-0 text-xs bg-rose-900/80 text-rose-300 px-3 py-1.5 rounded-lg border border-rose-700/50 hover:bg-rose-800">Logout</button>
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            <button type="button" onclick="showAdminSection('catalog')" class="admin-nav-btn text-[11px] font-black px-2.5 py-2 rounded-xl border border-amber-500/30 text-amber-300 bg-amber-500/10">📦 Katalog</button>
+            <button type="button" onclick="showAdminSection('orders')" class="admin-nav-btn text-[11px] font-black px-2.5 py-2 rounded-xl border border-slate-700 text-slate-400">🧾 Pesanan</button>
+            <button type="button" onclick="showAdminSection('service')" class="admin-nav-btn text-[11px] font-black px-2.5 py-2 rounded-xl border border-slate-700 text-slate-400">⚙️ Layanan</button>
+          </div>
         </div>
-        <details class="mb-4 rounded-2xl border border-slate-800 bg-slate-950/50 overflow-hidden">
-          <summary class="cursor-pointer select-none px-4 py-3 text-sm font-black text-white hover:bg-slate-900/70">⚙️ Status Layanan & Announcement</summary>
+        <details id="admin-service-section" class="hidden mb-4 rounded-2xl border border-slate-800 bg-slate-950/50 overflow-hidden">
+          <summary class="hidden">Service</summary>
+          <div class="p-4">
+            <div class="text-xs font-black text-amber-300 mb-3">⚙️ Status Layanan & Announcement</div>
           <div class="p-4 border-t border-slate-800">
           <div class="flex flex-col lg:flex-row lg:items-end gap-3">
             <div class="flex-1">
@@ -433,7 +445,7 @@
           </div>
           </div>
         </details>
-        <details open class="rounded-2xl border border-slate-800 bg-slate-950/50 overflow-hidden">
+        <details id="admin-catalog-section" open class="rounded-2xl border border-slate-800 bg-slate-950/50 overflow-hidden">
           <summary class="cursor-pointer select-none px-4 py-3 text-sm font-black text-amber-300 hover:bg-slate-900/70">📦 Kelola Katalog</summary>
           <div class="p-4 border-t border-slate-800">
         <form id="item-form" onsubmit="saveItem(event)" class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
@@ -819,7 +831,8 @@
     const CART_KEY = "taastore_cart_v1";
     const defaultReviews = [];
     const ORDERS_KEY = "taastore_orders_v1";
-    const ADMIN_SESSION_KEY = "taastore_admin_session_v1";
+    const ADMIN_SESSION_KEY = "taastore_admin_session_v2";
+    const ADMIN_SESSION_LEGACY_KEY = "taastore_admin_session_v1";
 
     /* Audio Synthesizer (Retro Cyber Beep / Click SFX) */
     let soundEnabled = true;
@@ -2707,11 +2720,29 @@ Terima kasih 🙏`;
       }
     }
 
+    function showAdminSection(section) {
+      if (!isAdmin) return;
+      const catalog = document.getElementById('admin-catalog-section');
+      const service = document.getElementById('admin-service-section');
+      const orders = document.getElementById('admin-orders-panel');
+      const buttons = Array.from(document.querySelectorAll('.admin-nav-btn'));
+      const active = 'text-[11px] font-black px-2.5 py-2 rounded-xl border border-amber-500/30 text-amber-300 bg-amber-500/10';
+      const inactive = 'text-[11px] font-black px-2.5 py-2 rounded-xl border border-slate-700 text-slate-400';
+      buttons.forEach((btn, i) => { btn.className = (i === ({catalog:0,orders:1,service:2}[section] ?? 0)) ? `admin-nav-btn ${active}` : `admin-nav-btn ${inactive}`; });
+      if (catalog) catalog.classList.toggle('hidden', section !== 'catalog');
+      if (service) service.classList.toggle('hidden', section !== 'service');
+      if (orders) orders.classList.toggle('hidden', section !== 'orders');
+      if (section === 'orders') loadAdminOrders();
+      if (section === 'catalog') window.scrollTo({top: document.getElementById('admin-panel')?.offsetTop || 0, behavior:'smooth'});
+    }
+
     function setAdminActive(key) {
       isAdmin = true;
       adminKey = key || "TAASTORE.ID";
-      try { localStorage.setItem(ADMIN_SESSION_KEY, "1"); } catch (_) {}
+      try { localStorage.setItem(ADMIN_SESSION_KEY, "1"); localStorage.removeItem(ADMIN_SESSION_LEGACY_KEY); } catch (_) {}
       document.getElementById("admin-panel").classList.remove("hidden");
+      document.getElementById("admin-orders-panel").classList.add("hidden");
+      showAdminSection('catalog');
       document.getElementById("admin-btn").innerText = "Admin Active";
       document.getElementById("admin-btn").className = "bg-emerald-900/80 text-emerald-300 text-xs px-3 py-2 rounded-lg border border-emerald-600/50 font-bold";
       filterProducts();
@@ -2721,7 +2752,7 @@ Terima kasih 🙏`;
 
     function restoreAdminSession() {
       try {
-        if (localStorage.getItem(ADMIN_SESSION_KEY) === "1") {
+        if (localStorage.getItem(ADMIN_SESSION_KEY) === "1" || localStorage.getItem(ADMIN_SESSION_LEGACY_KEY) === "1") {
           // The backend key is already fixed by the current admin login flow.
           // Persist only the logged-in state; do not ask for the password again on refresh.
           setAdminActive("TAASTORE.ID");
@@ -2743,9 +2774,11 @@ Terima kasih 🙏`;
     function logoutAdmin() {
       isAdmin = false;
       adminKey = "";
-      try { localStorage.removeItem(ADMIN_SESSION_KEY); } catch (_) {}
+      try { localStorage.removeItem(ADMIN_SESSION_KEY); localStorage.removeItem(ADMIN_SESSION_LEGACY_KEY); } catch (_) {}
       document.getElementById("admin-panel").classList.add("hidden");
       document.getElementById("admin-orders-panel").classList.add("hidden");
+      document.getElementById("admin-service-section")?.classList.add("hidden");
+      document.getElementById("admin-catalog-section")?.classList.remove("hidden");
       document.getElementById("admin-btn").innerText = "Admin Login";
       document.getElementById("admin-btn").className = "bg-slate-800/80 hover:bg-slate-700 text-xs text-slate-300 px-3 py-2 rounded-lg border border-slate-700/80 transition";
       resetForm();
