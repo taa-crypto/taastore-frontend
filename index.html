@@ -411,7 +411,9 @@
           <h2 class="text-lg font-bold text-amber-400">Panel Manajemen Produk (Protected)</h2>
           <button onclick="logoutAdmin()" class="text-xs bg-rose-900/80 text-rose-300 px-3 py-1.5 rounded-lg border border-rose-700/50 hover:bg-rose-800">Logout Admin</button>
         </div>
-        <div class="mb-6 rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+        <details class="mb-4 rounded-2xl border border-slate-800 bg-slate-950/50 overflow-hidden">
+          <summary class="cursor-pointer select-none px-4 py-3 text-sm font-black text-white hover:bg-slate-900/70">⚙️ Status Layanan & Announcement</summary>
+          <div class="p-4 border-t border-slate-800">
           <div class="flex flex-col lg:flex-row lg:items-end gap-3">
             <div class="flex-1">
               <div class="text-xs font-black text-white mb-1">Status Layanan</div>
@@ -429,7 +431,11 @@
             </div>
             <button type="button" onclick="copyStoreAnnouncement()" class="shrink-0 bg-cyan-600/80 hover:bg-cyan-600 text-white font-black text-xs px-4 py-2.5 rounded-xl border border-cyan-500/30">Copy Announcement</button>
           </div>
-        </div>
+          </div>
+        </details>
+        <details open class="rounded-2xl border border-slate-800 bg-slate-950/50 overflow-hidden">
+          <summary class="cursor-pointer select-none px-4 py-3 text-sm font-black text-amber-300 hover:bg-slate-900/70">📦 Kelola Katalog</summary>
+          <div class="p-4 border-t border-slate-800">
         <form id="item-form" onsubmit="saveItem(event)" class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
           <input type="hidden" id="item-id">
           <input type="text" id="item-name" placeholder="Nama Produk" required class="bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-sm focus:outline-none focus:border-amber-400">
@@ -454,6 +460,8 @@
             <button type="button" onclick="resetForm()" class="bg-slate-800 text-slate-300 p-2.5 rounded-xl text-sm border border-slate-700">Batal</button>
           </div>
         </form>
+          </div>
+        </details>
       </section>
 
       <section id="admin-orders-panel" class="hidden mb-10 bg-slate-900/90 backdrop-blur-md p-6 rounded-2xl border border-cyan-500/30 shadow-2xl">
@@ -2699,19 +2707,34 @@ Terima kasih 🙏`;
       }
     }
 
+    function setAdminActive(key) {
+      isAdmin = true;
+      adminKey = key || "TAASTORE.ID";
+      try { localStorage.setItem(ADMIN_SESSION_KEY, "1"); } catch (_) {}
+      document.getElementById("admin-panel").classList.remove("hidden");
+      document.getElementById("admin-btn").innerText = "Admin Active";
+      document.getElementById("admin-btn").className = "bg-emerald-900/80 text-emerald-300 text-xs px-3 py-2 rounded-lg border border-emerald-600/50 font-bold";
+      filterProducts();
+      loadAdminOrders();
+      loadReviews();
+    }
+
+    function restoreAdminSession() {
+      try {
+        if (localStorage.getItem(ADMIN_SESSION_KEY) === "1") {
+          // The backend key is already fixed by the current admin login flow.
+          // Persist only the logged-in state; do not ask for the password again on refresh.
+          setAdminActive("TAASTORE.ID");
+        }
+      } catch (_) {}
+    }
+
     function toggleAdminPanel() {
       playCyberBeep(800, 'sawtooth', 0.05);
       if (!isAdmin) {
         const inputPassword = prompt("Masukkan Password Admin TAASTORE:");
         if (inputPassword === "TAASTORE.ID") {
-          isAdmin = true;
-          adminKey = inputPassword;
-          document.getElementById("admin-panel").classList.remove("hidden");
-          document.getElementById("admin-btn").innerText = "Admin Active";
-          document.getElementById("admin-btn").className = "bg-emerald-900/80 text-emerald-300 text-xs px-3 py-2 rounded-lg border border-emerald-600/50 font-bold";
-          filterProducts();
-          loadAdminOrders();
-          loadReviews();
+          setAdminActive(inputPassword);
         } else if (inputPassword) {
           alert("Password Salah!");
         }
@@ -2720,6 +2743,7 @@ Terima kasih 🙏`;
     function logoutAdmin() {
       isAdmin = false;
       adminKey = "";
+      try { localStorage.removeItem(ADMIN_SESSION_KEY); } catch (_) {}
       document.getElementById("admin-panel").classList.add("hidden");
       document.getElementById("admin-orders-panel").classList.add("hidden");
       document.getElementById("admin-btn").innerText = "Admin Login";
@@ -2910,6 +2934,7 @@ Terima kasih 🙏`;
       document.getElementById("form-btn").innerText = "Tambah Produk";
       syncItemStatusOptions();
     }
+    restoreAdminSession();
     loadCartItems();
     loadStoreStatus();
     loadItems();
