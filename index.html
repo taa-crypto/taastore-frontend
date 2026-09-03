@@ -1081,12 +1081,17 @@
       if (!item) return null;
       return item.take_rate ?? item.sell_rate ?? item.takeRate ?? item.sellRate ??
              item.take_price ?? item.sell_price ?? item.takePrice ?? item.sellPrice ??
-             item.rate_take ?? item.rateTake ?? item.take ?? item.sell ?? null;
+             item.rate_take ?? item.rateTake ?? item.take ?? item.sell ??
+             // In the existing Admin product form, JUAL rate is stored in `price`.
+             item.price ?? null;
+    }
+
+    function isJualType(type) {
+      return ["jual", "sell", "take", "katalog jual"].includes(String(type ?? "").trim().toLowerCase());
     }
 
     function isJualItem(item) {
-      const type = String(item?.type ?? "").trim().toLowerCase();
-      return ["jual", "sell", "take", "katalog jual"].includes(type);
+      return isJualType(item?.type);
     }
 
     function favoriteKey(item) {
@@ -1696,6 +1701,7 @@
       }
       const results = await Promise.all(ids.map(async id => ({ id, order: await getOrderById(id) })));
       const valid = results.filter(x => x.order);
+      const reviewedIds = new Set((await Promise.all(valid.map(async x => (await hasReviewForOrder(x.order.order_id)) ? String(x.order.order_id).toUpperCase() : null))).filter(Boolean));
       if (valid.length) {
         const completedForPrompt = valid.map(x => x.order).find(o => o && (o.status === 'COMPLETED' || ((o.order_type === 'SELL' || o.payment === 'SELL') && o.sell_status === 'SELL_COMPLETED')));
         if (completedForPrompt) maybeShowTestimonialSuccess(completedForPrompt);
@@ -1713,7 +1719,12 @@
         const statusClass = done ? 'border-emerald-700/50 text-emerald-300 bg-emerald-950/40' : (cancelled || expired) ? 'border-rose-700/50 text-rose-300 bg-rose-950/30' : 'border-amber-700/50 text-amber-300 bg-amber-950/30';
         const sellStatusMap = {SELL_WAITING_CONFIRMATION:'MENUNGGU KONFIRMASI',SELL_WAITING_DROP:'MENUNGGU DROP',SELL_PROOF_SUBMITTED:'BUKTI DROP TERKIRIM',SELL_CANCELLED:'DIBATALKAN',SELL_COMPLETED:'SELESAI'};
         const statusText = done ? 'SELESAI' : (expired ? 'WAKTU PEMBAYARAN HABIS' : (isSell ? (sellStatusMap[sellStatus] || 'MENUNGGU') : (order.status === 'PAID' ? 'PEMBAYARAN DITERIMA' : (order.buyer_proof_data ? 'BUKTI PEMBAYARAN TERKIRIM' : 'MENUNGGU PEMBAYARAN'))));
-        let reviewBtn = done ? `<div class="flex flex-col items-end gap-1.5"><span class="text-[10px] text-emerald-300">Transaksi selesai. Punya pengalaman?</span><button type="button" onclick="openReviewForOrder('${escapeReviewText(order.order_id)}')" class="text-xs px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black">⭐ Beri Testimoni</button></div>` : '<span class="text-[10px] text-slate-500">Review aktif setelah Admin menyelesaikan transaksi.</span>'
+        const alreadyReviewed = reviewedIds.has(String(order.order_id).toUpperCase());
+        let reviewBtn = done
+          ? (alreadyReviewed
+              ? `<div class="text-[10px] text-emerald-300 font-bold">✓ Testimoni sudah diberikan</div>`
+              : `<div class="flex flex-col items-end gap-1.5"><span class="text-[10px] text-emerald-300">Transaksi selesai. Punya pengalaman?</span><button type="button" onclick="openReviewForOrder('${escapeReviewText(order.order_id)}')" class="text-xs px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black">⭐ Beri Testimoni</button></div>`)
+          : '<span class="text-[10px] text-slate-500">Review aktif setelah Admin menyelesaikan transaksi.</span>'
         if (!isSell && !done && order.status !== 'PAID') reviewBtn = `<div class="flex gap-2 flex-wrap justify-end"><button type="button" onclick="reopenPayment('${escapeReviewText(order.order_id)}')" class="text-xs px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black">💳 ${order.buyer_proof_data ? 'Lihat Pembayaran' : 'Lanjut Pembayaran'}</button></div>`;;
         if (isSell && sellStatus === 'SELL_WAITING_CONFIRMATION') reviewBtn = `<div class="flex gap-2"><button type="button" onclick="agreeSellOrder('${escapeReviewText(order.order_id)}')" class="text-xs px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black">✓ Setujui & Lanjutkan</button><button type="button" onclick="cancelSellOrder('${escapeReviewText(order.order_id)}')" class="text-xs px-3 py-2 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-white font-bold">Batal</button></div>`;
         if (isSell && sellStatus === 'SELL_WAITING_DROP') reviewBtn = `<label class="text-xs px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black cursor-pointer">📷 Upload Bukti Drop<input type="file" accept="image/*" class="hidden" onchange="uploadSellProof('${escapeReviewText(order.order_id)}', this)"></label>`;
@@ -1737,6 +1748,16 @@
       list.innerHTML = `
         ${active.length ? `<div class="space-y-3">${active.map(renderBuyerOrderCard).join('')}</div>` : '<p class="text-xs text-slate-500 py-3">Tidak ada pesanan aktif saat ini.</p>'}
         ${history.length ? `<details class="mt-5 rounded-xl border border-slate-800 bg-slate-950/30"><summary class="cursor-pointer select-none px-3 py-2.5 text-xs font-bold text-slate-400">📁 Riwayat Pesanan (${history.length})</summary><div class="p-3 pt-0 space-y-3">${history.map(renderBuyerOrderCard).join('')}</div></details>` : ''}`;
+    }
+
+    async function hasReviewForOrder(orderId) {
+      if (!orderId) return false;
+      try {
+        const rows = await supabaseRequest(`reviews?select=order_id&order_id=eq.${encodeURIComponent(orderId)}&limit=1`);
+        return Array.isArray(rows) && rows.length > 0;
+      } catch (_) {
+        return false;
+      }
     }
 
     let testimonialSuccessOrderId = null;
@@ -1842,6 +1863,14 @@
         return;
       }
       try {
+        // One order = one testimonial. Check the server before inserting.
+        const existingReviews = await supabaseRequest(`reviews?select=order_id&order_id=eq.${encodeURIComponent(order.order_id)}&limit=1`);
+        if (Array.isArray(existingReviews) && existingReviews.length) {
+          showToast("Order ini sudah memiliki testimoni.", true);
+          await loadReviews();
+          return;
+        }
+
         await supabaseRequest("reviews", {
           method: "POST",
           body: JSON.stringify({
@@ -1855,8 +1884,9 @@
           })
         });
       } catch (err) {
-        showToast("Gagal menyimpan testimoni ke database. Coba lagi.", true);
-        console.error(err);
+        const detail = [err.message, err.code ? `code: ${err.code}` : "", err.hint ? `hint: ${err.hint}` : ""].filter(Boolean).join(" | ");
+        showToast(`Gagal menyimpan testimoni: ${detail || "cek Supabase."}`, true);
+        console.error("TAASTORE submitReview error:", err);
         return;
       }
       closeReviewModal();
@@ -2313,22 +2343,21 @@
     }
     let continuingToPayment = false;
     function continueToPayment(){
+      // First tap must stay entirely synchronous: no await, no network, no refresh.
       if (continuingToPayment) return;
-      const order=pendingPaymentOrder;
+      const order = pendingPaymentOrder;
       if (!order) return;
-      continuingToPayment=true;
-      const btn = document.querySelector('#order-success-modal button[onclick="continueToPayment()"]');
-      if (btn) { btn.disabled=true; btn.setAttribute('aria-busy','true'); btn.textContent='Membuka pembayaran…'; }
-      pendingPaymentOrder=null;
+      continuingToPayment = true;
+      pendingPaymentOrder = null;
       document.getElementById('order-success-modal')?.classList.add('hidden');
-      // V7.15.1: open the payment UI immediately on the first pointer/click event.
-      // Do not wait for a network refresh, image request, or focus operation.
-      try { openPaymentModal(order); } catch (err) {
+      try {
+        openPaymentModal(order);
+      } catch (err) {
         console.error('TAASTORE payment modal error:', err);
         showToast('Gagal membuka pembayaran. Coba sekali lagi.', true);
+      } finally {
+        continuingToPayment = false;
       }
-      if (btn) { btn.disabled=false; btn.removeAttribute('aria-busy'); btn.textContent='Lanjut Pembayaran'; }
-      continuingToPayment=false;
     }
     function renderPaymentOrderItems(order) {
       const box=document.getElementById('payment-order-items');
@@ -2696,75 +2725,134 @@ Terima kasih 🙏`;
 
     function editItem(id) {
       const item = itemsData.find(i => i.id === id);
-      if (item) {
-        document.getElementById("item-id").value = item.id;
-        document.getElementById("item-name").value = item.name;
-        document.getElementById("item-price").value = item.price;
-        document.getElementById("item-image").value = item.image_url || "";
-        document.getElementById("item-type").value = (item.type || 'beli').toLowerCase();
-        syncItemStatusOptions();
-        document.getElementById("item-status").value = item.stock_status || "ready";
-        syncItemStatusOptions();
+      if (!item) return;
+
+      const type = String(item.type || 'beli').toLowerCase();
+      const isJual = isJualType(type);
+
+      document.getElementById("item-id").value = item.id;
+      document.getElementById("item-name").value = item.name || "";
+      document.getElementById("item-price").value = item.price ?? "";
+      document.getElementById("item-image").value = item.image_url || "";
+      document.getElementById("item-type").value = isJual ? "jual" : "beli";
+
+      syncItemStatusOptions();
+      document.getElementById("item-status").value = String(item.stock_status || "ready").toLowerCase() === "empty" ? "empty" : "ready";
+
+      const stockEl = document.getElementById("item-stock-qty");
+      if (isJual) {
+        // JUAL has no BUY inventory quantity. Never load or edit BUY stock here.
+        stockEl.value = "";
+        stockEl.disabled = true;
+        stockEl.title = "Stok BUY tidak digunakan untuk produk JUAL. Status JUAL memakai OPEN/CLOSED.";
+        stockEl.placeholder = "JUAL: stok BUY tidak digunakan";
+      } else {
         const savedOverride = getStockOverrides()[String(item.id)];
-        const isBglBuy = (item.type || 'beli').toLowerCase() === 'beli' && /blue gem lock/i.test(item.name || '');
-        const isDlBuy = (item.type || 'beli').toLowerCase() === 'beli' && /diamond lock/i.test(item.name || '');
+        const isBglBuy = /blue gem lock/i.test(item.name || '');
+        const isDlBuy = /diamond lock/i.test(item.name || '');
         const unified = getUnifiedLockStockDL();
-        document.getElementById("item-stock-qty").value = isDlBuy ? (unified === null ? '' : (unified/100).toFixed(2).replace(/\.00$/, '')) : (isBglBuy ? (unified === null ? '' : (unified/100).toFixed(2).replace(/\.00$/, '')) : (savedOverride !== undefined ? savedOverride : (getStockQuantity(item) ?? "")));
-        document.getElementById("item-stock-qty").disabled = isDlBuy;
-        document.getElementById("item-stock-qty").title = isDlBuy ? 'Stok DL mengikuti stok BGL.' : '';
-        document.getElementById("form-btn").innerText = "Simpan Perubahan";
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        stockEl.value = isDlBuy
+          ? (unified === null ? '' : (unified / 100).toFixed(2).replace(/\.00$/, ''))
+          : (isBglBuy
+              ? (unified === null ? '' : (unified / 100).toFixed(2).replace(/\.00$/, ''))
+              : (savedOverride !== undefined ? savedOverride : (getStockQuantity(item) ?? "")));
+        stockEl.disabled = isDlBuy;
+        stockEl.title = isDlBuy ? 'Stok DL mengikuti stok BGL.' : '';
+        stockEl.placeholder = "Stok BGL (1 BGL = 100 DL)";
       }
+
+      document.getElementById("form-btn").innerText = "Simpan Perubahan";
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
     async function saveItem(e) {
       e.preventDefault();
+
       const id = document.getElementById("item-id").value;
       const name = document.getElementById("item-name").value.trim();
       const price = parseFloat(document.getElementById("item-price").value);
       const image_url = document.getElementById("item-image").value;
-      const type = document.getElementById("item-type").value;
+      const type = String(document.getElementById("item-type").value || 'beli').toLowerCase();
+      const isJual = isJualType(type);
       const stockRaw = document.getElementById("item-stock-qty").value;
-      const isBglBuy = type === 'beli' && /blue gem lock/i.test(name);
-      const isDlBuy = type === 'beli' && /diamond lock/i.test(name);
+
+      if (!name || !Number.isFinite(price)) {
+        showToast('Nama dan harga/rate wajib diisi.', true);
+        return;
+      }
+
+      // BUY inventory logic remains unchanged. JUAL deliberately has no stock_quantity.
+      const isBglBuy = !isJual && type === 'beli' && /blue gem lock/i.test(name);
+      const isDlBuy = !isJual && type === 'beli' && /diamond lock/i.test(name);
       const enteredBgl = stockRaw === '' ? null : Math.max(0, Number(String(stockRaw).replace(',', '.')) || 0);
-      const stock_quantity = isBglBuy && enteredBgl !== null ? Math.round(enteredBgl * 100) : (isDlBuy ? null : (enteredBgl === null ? null : Math.floor(enteredBgl)));
-      const displayBgl = isBglBuy && enteredBgl !== null ? enteredBgl : (isDlBuy ? (getUnifiedLockStockDL() === null ? null : getUnifiedLockStockDL()/100) : enteredBgl);
+      const stock_quantity = isBglBuy && enteredBgl !== null
+        ? Math.round(enteredBgl * 100)
+        : (isDlBuy ? null : (enteredBgl === null ? null : Math.floor(enteredBgl)));
+
       const selectedStatus = String(document.getElementById("item-status").value || 'ready').toLowerCase();
-      const stock_status = type === 'jual'
-        ? (selectedStatus === 'empty' ? 'empty' : 'ready')
-        : (stock_quantity === 0 ? 'empty' : stock_quantity !== null && stock_quantity <= 100 ? 'limited' : 'ready');
-      const payload = { name, price, image_url, type, stock_status, stock_quantity };
-      if (isDlBuy) delete payload.stock_quantity;
+      const stock_status = isJual
+        ? (selectedStatus === 'empty' ? 'empty' : 'ready') // OPEN / CLOSED for JUAL
+        : (stock_quantity === 0
+            ? 'empty'
+            : stock_quantity !== null && stock_quantity <= 100 ? 'limited' : 'ready');
+
+      // Critical: do NOT send stock_quantity for JUAL, so editing a JUAL item can never
+      // overwrite or zero-out the BUY stock field.
+      const payload = { name, price, image_url, type, stock_status };
+      if (!isJual && !isDlBuy) payload.stock_quantity = stock_quantity;
+
       const headers = { "Content-Type": "application/json", "x-admin-key": adminKey };
+
       try {
         const url = id ? `${API_URL}/items/${id}` : `${API_URL}/items`;
-        const response = await fetch(url, { method: id ? "PUT" : "POST", headers, body: JSON.stringify(payload) });
+        const response = await fetch(url, {
+          method: id ? "PUT" : "POST",
+          headers,
+          body: JSON.stringify(payload)
+        });
+
         if (!response.ok) {
           const detail = await response.text().catch(() => '');
           throw new Error(`Gagal menyimpan produk (${response.status})${detail ? `: ${detail}` : ''}`);
         }
+
         let savedProduct = null;
         try { savedProduct = await response.json(); } catch (_) {}
-        const savedId = id || (Array.isArray(savedProduct) ? savedProduct[0]?.id : null) || savedProduct?.id || savedProduct?.item?.id || savedProduct?.data?.id || '';
+        const savedId = id
+          || (Array.isArray(savedProduct) ? savedProduct[0]?.id : null)
+          || savedProduct?.id
+          || savedProduct?.item?.id
+          || savedProduct?.data?.id
+          || '';
 
-        if (savedId && (isBglBuy || (!isDlBuy && stock_quantity !== null))) {
+        if (!isJual && savedId && (isBglBuy || (!isDlBuy && stock_quantity !== null))) {
           setStockOverride(savedId, stock_quantity === null ? 0 : stock_quantity);
           const remoteSaved = isBglBuy
             ? await setUnifiedLockStockDL(stock_quantity)
             : await saveRemoteStock(savedId, stock_quantity);
           if (remoteSaved === false) throw new Error('Produk tersimpan, tetapi stok server gagal disimpan.');
         }
+
         resetForm();
         itemsLoadPromise = null;
         await loadItems();
-        showToast('Produk dan stok berhasil disimpan.');
+        showToast(isJual ? 'Produk JUAL berhasil disimpan.' : 'Produk dan stok berhasil disimpan.');
       } catch (err) {
         console.error('TAASTORE save item error:', err);
-        if (id && stock_quantity !== null) {
+
+        // Local fallback also keeps JUAL stock isolated from BUY stock.
+        if (id) {
           const local = itemsData.find(x => String(x.id) === String(id));
-          if (local) { local.stock_quantity = stock_quantity; local.stock_status = stock_status; }
+          if (local) {
+            local.name = name;
+            local.price = price;
+            local.image_url = image_url;
+            local.type = type;
+            local.stock_status = stock_status;
+            if (!isJual && !isDlBuy && stock_quantity !== null) local.stock_quantity = stock_quantity;
+          }
           filterProducts();
         }
+
         showToast(err?.message || 'Gagal menyimpan produk/stok.', true);
       }
     }
