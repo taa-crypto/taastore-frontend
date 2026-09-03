@@ -314,16 +314,16 @@
     
     <!-- Running Text / Marquee Seamless -->
     <div class="bg-slate-900/80 backdrop-blur-md border-b border-amber-500/20 py-2.5 overflow-hidden mb-6">
-      <div class="animate-marquee-seamless text-amber-400 font-medium text-sm flex gap-8">
+      <div id="store-running-ticker" class="animate-marquee-seamless text-amber-400 font-medium text-sm flex gap-8">
         <div class="flex gap-8 shrink-0 items-center">
-          <span>🚀 Selamat datang di TAASTORE! Tempat transaksi Gems & Items paling aman, terpercaya, dan proses kilat 24/7!</span>
-          <span>⚡ Promo Spesial Hari Ini: Dapatkan bonus dan harga grosir terbaik untuk setiap pembelian partai besar!</span>
-          <span>💬 Butuh bantuan atau mau rekber? Hubungi Customer Service resmi kami via WhatsApp aktif 24 jam!</span>
+          <span data-running-message>🚀 Selamat datang di TAASTORE! Tempat transaksi Gems & Items paling aman, terpercaya, dan proses kilat 24/7!</span>
+          <span data-running-message>⚡ Promo Spesial Hari Ini: Dapatkan bonus dan harga grosir terbaik untuk setiap pembelian partai besar!</span>
+          <span data-running-message>💬 Butuh bantuan atau mau rekber? Hubungi Customer Service resmi kami via WhatsApp aktif 24 jam!</span>
         </div>
         <div class="flex gap-8 shrink-0 items-center" aria-hidden="true">
-          <span>🚀 Selamat datang di TAASTORE! Tempat transaksi Gems & Items paling aman, terpercaya, dan proses kilat 24/7!</span>
-          <span>⚡ Promo Spesial Hari Ini: Dapatkan bonus dan harga grosir terbaik untuk setiap pembelian partai besar!</span>
-          <span>💬 Butuh bantuan atau mau rekber? Hubungi Customer Service resmi kami via WhatsApp aktif 24 jam!</span>
+          <span data-running-message>🚀 Selamat datang di TAASTORE! Tempat transaksi Gems & Items paling aman, terpercaya, dan proses kilat 24/7!</span>
+          <span data-running-message>⚡ Promo Spesial Hari Ini: Dapatkan bonus dan harga grosir terbaik untuk setiap pembelian partai besar!</span>
+          <span data-running-message>💬 Butuh bantuan atau mau rekber? Hubungi Customer Service resmi kami via WhatsApp aktif 24 jam!</span>
         </div>
       </div>
     </div>
@@ -875,6 +875,34 @@
       }
     };
     STORE_STATUS_META.OPEN.announcement = `_💎 TAASTORE.GT_\n\n*🟢 BUY & SELL — OPEN*\n\nLayanan transaksi TAASTORE.GT telah kembali dibuka.\n\n📊 Rate terbaru akan selalu diperbarui melalui channel ini.\n\nSilakan melakukan transaksi melalui website TAASTORE.GT.\n\n_Thank you for your support. 🙏_\n\nTAASTORE.GT`;
+    function updateRunningTicker(){
+      const messages = document.querySelectorAll('[data-running-message]');
+      if(!messages.length) return;
+      const statusMessages = {
+        OPEN: [
+          '🚀 Selamat datang di TAASTORE! Tempat transaksi Gems & Items paling aman, terpercaya, dan proses kilat 24/7!',
+          '⚡ Rate & stok terbaru tersedia di website TAASTORE.GT.',
+          '💬 Butuh bantuan? Hubungi Customer Service resmi TAASTORE via WhatsApp.'
+        ],
+        CLOSED: [
+          '🔴 BUY & SELL — CLOSED • Layanan transaksi TAASTORE.GT sedang ditutup.',
+          '📢 Informasi pembukaan kembali akan diumumkan melalui Channel TAASTORE.',
+          '💬 Silakan cek Channel TAASTORE untuk update terbaru.'
+        ],
+        UNAVAILABLE: [
+          '🟡 TEMPORARILY UNAVAILABLE • BUY & SELL sementara tidak dapat diproses.',
+          '📢 Layanan akan kembali tersedia setelah TAASTORE.GT dapat beroperasi seperti biasa.',
+          '💬 Silakan cek Channel TAASTORE untuk update terbaru.'
+        ],
+        GAME_MAINTENANCE: [
+          '🎮 GAME MAINTENANCE • Growtopia sedang dalam maintenance.',
+          '⏳ BUY & SELL sementara tidak dapat diproses sampai server Growtopia kembali online.',
+          '📢 Update layanan akan diinformasikan setelah maintenance selesai.'
+        ]
+      };
+      const active = statusMessages[storeStatus] || statusMessages.OPEN;
+      messages.forEach((el,i)=>{ el.textContent = active[i % active.length]; });
+    }
     function getCachedStoreStatus(){ try { const v=localStorage.getItem(STORE_STATUS_KEY); return STORE_STATUS_META[v] ? v : 'OPEN'; } catch(_){ return 'OPEN'; } }
     function applyStoreStatusUI(){
       const meta=STORE_STATUS_META[storeStatus] || STORE_STATUS_META.OPEN;
@@ -885,6 +913,7 @@
       const select=document.getElementById('store-status-select');
       const preview=document.getElementById('store-announcement-preview');
       if(select) select.value=storeStatus;
+      updateRunningTicker();
       if(preview) preview.textContent=meta.announcement;
       if(!banner) return;
       banner.className='mb-6 rounded-2xl border p-4 shadow-xl backdrop-blur-md ' + (meta.className || 'hidden');
@@ -1435,6 +1464,10 @@
               <button type="button" disabled class="w-full inline-flex items-center justify-center gap-2 text-center bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50 font-bold py-2.5 px-4 rounded-xl">
                 <span class="w-5 h-5 inline-flex items-center justify-center">×</span>Stok Habis
               </button>
+            ` : (!isStoreOpen() ? `
+              <button type="button" disabled class="w-full inline-flex items-center justify-center gap-2 text-center bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50 font-bold py-2.5 px-4 rounded-xl">
+                Layanan Sementara Ditutup
+              </button>
             ` : `
               <button type="button" onclick="addToCart(${item.id},1)" class="w-full inline-flex items-center justify-center gap-2 text-center bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-lg shadow-amber-500/10 font-bold py-2.5 px-4 rounded-xl transition duration-200">
                 <img src="${localItemImage}" alt="" class="w-5 h-5 object-contain [image-rendering:pixelated]" aria-hidden="true">Tambah ke Pesanan
@@ -1941,6 +1974,7 @@
       const el=document.getElementById('cart-badge'); if(el) el.textContent=String(cartItems.reduce((n,x)=>n+(Number(x.qty)||0),0));
     }
     function addToCart(id, qty=1) {
+      if(!guardNewTransaction()) return;
       const item=itemsData.find(i=>String(i.id)===String(id));
       if(!item || isJualItem(item)) return;
       const stock=getOrderableStock(item);
