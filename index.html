@@ -2652,13 +2652,18 @@ Terima kasih 🙏`;
         document.getElementById("item-type").value = type;
 
         // JUAL status comes from the product itself. Never derive it from BUY stock.
-        const backendStatus = String(item.stock_status || 'ready').toLowerCase();
+        // JUAL status is authoritative from the product returned by the backend.
+        // Do not let an old local cache override the saved OPEN/CLOSED value.
+        const backendStatus = String(item.stock_status || '').toLowerCase();
         const cachedJualStatus = type === 'jual' ? getSavedJualStatus(item.id) : '';
-        const savedStatus = cachedJualStatus || backendStatus;
+        const savedStatus = type === 'jual'
+          ? (backendStatus === 'empty' || backendStatus === 'ready' ? backendStatus : (cachedJualStatus || 'ready'))
+          : (backendStatus || 'ready');
         document.getElementById("item-status").value = type === 'jual'
           ? (savedStatus === 'empty' ? 'empty' : 'ready')
           : (['ready','limited','empty'].includes(savedStatus) ? savedStatus : 'ready');
         syncItemStatusOptions();
+        // syncItemStatusOptions keeps the selected JUAL value instead of deriving it from stock.
 
         const savedOverride = getStockOverrides()[String(item.id)];
         const isBglBuy = type === 'beli' && /blue gem lock/i.test(item.name || '');
@@ -2699,6 +2704,7 @@ Terima kasih 🙏`;
       const stock_status = isJual
         ? (selectedStatus === 'empty' ? 'empty' : 'ready')
         : (stock_quantity === 0 ? 'empty' : stock_quantity !== null && stock_quantity <= 100 ? 'limited' : 'ready');
+      // Persist JUAL OPEN/CLOSED to the backend product status and keep a local fallback only.
       if (isJual && id) setSavedJualStatus(id, stock_status);
       const payload = { name, price, image_url, type, stock_status };
       if (!isJual) payload.stock_quantity = stock_quantity;
